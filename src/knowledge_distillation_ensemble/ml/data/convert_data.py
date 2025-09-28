@@ -50,13 +50,35 @@ class DataConverter:
 
         logger.info(f"DuckDB configured with memory limit: {self.memory_limit}")
 
+    def _extract_label_from_path(self, file_path: Union[str, Path]) -> str:
+        """Extract label from folder structure in file path."""
+        path = Path(file_path)
+
+        # Define folder to label mappings for CIC DIAD 2024
+        folder_mappings = {
+            "dos": "DoS",
+            "ddos": "DDoS",
+            "brute force": "Brute_Force",
+            "benign": "Benign",
+        }
+
+        # Look through parent directories for known attack categories
+        for parent in path.parents:
+            folder_name = parent.name.lower()
+            if folder_name in folder_mappings:
+                return folder_mappings[folder_name]
+
+        # If no match found, return Unknown
+        return "Unknown"
+
     def convert_csv_to_parquet(
         self,
-        csv_paths: Union[str, Path, List[Union[str, Path]]],
+        csv_paths: Union[str, Path, List[str], List[Path], List[Union[str, Path]]],
         output_name: str,
         filter_query: Optional[str] = None,
         partition_by: Optional[List[str]] = None,
         sample_rows: Optional[int] = None,
+        label_from_folder: bool = False,
     ) -> Path:
         """
         Convert CSV files to Parquet format with optional filtering.
@@ -67,6 +89,7 @@ class DataConverter:
             filter_query: Optional SQL WHERE clause for filtering
             partition_by: Optional list of columns to partition by
             sample_rows: Optional number of rows to sample for testing
+            label_from_folder: Whether to derive labels from folder structure
 
         Returns:
             Path to the created Parquet file/directory
@@ -107,35 +130,81 @@ class DataConverter:
                     # Handle multiple files
                     union_queries = []
                     for csv_file in csv_pattern:
-                        union_queries.append(
-                            f"SELECT * FROM "
-                            f"read_csv_auto('{csv_file}', sample_size=-1) "
-                            f"{where_clause}"
-                        )
+                        if label_from_folder:
+                            # Extract label from folder structure
+                            folder_label = self._extract_label_from_path(csv_file)
+                            union_queries.append(
+                                f"SELECT *, '{folder_label}' as FolderLabel FROM "
+                                f"read_csv_auto('{csv_file}', sample_size=-1) "
+                                f"{where_clause}"
+                            )
+                        else:
+                            union_queries.append(
+                                f"SELECT * FROM "
+                                f"read_csv_auto('{csv_file}', sample_size=-1) "
+                                f"{where_clause}"
+                            )
                     main_query = " UNION ALL ".join(union_queries)
                     if limit_clause:
                         main_query = f"({main_query}) {limit_clause}"
                 else:
                     # Handle single file or glob pattern
-                    main_query = f"""
-                    SELECT *
-                    FROM read_csv_auto('{csv_pattern}', sample_size=-1)
-                    {where_clause}
-                    {limit_clause}
-                    """  # Build COPY statement
+                    if label_from_folder:
+                        folder_label = self._extract_label_from_path(csv_pattern)
+                        main_query = f"""
+                        SELECT *, '{folder_label}' as FolderLabel
+                        FROM read_csv_auto('{csv_pattern}', sample_size=-1)
+                        {where_clause}
+                        {limit_clause}
+                        """
+                    else:
+                        main_query = f"""
+                        SELECT *
+                        FROM read_csv_auto('{csv_pattern}', sample_size=-1)
+                        {where_clause}
+                        {limit_clause}
+                        """  # Build COPY statement
                 copy_options = ["FORMAT PARQUET", "COMPRESSION ZSTD"]
 
                 if partition_by:
                     partition_cols = ", ".join(partition_by)
                     copy_options.append(f"PARTITION_BY ({partition_cols})")
 
-                copy_statement = f"""
-                COPY ({main_query})
-                TO '{output_path}' ({", ".join(copy_options)});
-                """
+                # Handle folder labeling post-processing
+                if label_from_folder:
+                    # First create temporary parquet with FolderLabel
+                    temp_query = f"""
+                    COPY ({main_query})
+                    TO '{output_path}.temp' ({", ".join(copy_options)});
+                    """
+                    logger.debug(f"Executing SQL: {temp_query}")
+                    con.execute(temp_query)
 
-                logger.debug(f"Executing SQL: {copy_statement}")
-                con.execute(copy_statement)
+                    # Now replace Label column with FolderLabel and remove FolderLabel
+                    final_query = f"""
+                    COPY (
+                        SELECT 
+                            * EXCLUDE (Label, FolderLabel),
+                            COALESCE(
+                                CASE WHEN Label = 'NeedManualLabel' THEN FolderLabel ELSE Label END,
+                                FolderLabel
+                            ) as Label
+                        FROM read_parquet('{output_path}.temp')
+                    )
+                    TO '{output_path}' ({", ".join(copy_options)});
+                    """
+                    con.execute(final_query)
+
+                    # Clean up temp file
+                    Path(f"{output_path}.temp").unlink(missing_ok=True)
+                    logger.info(f"Applied folder-based labeling to {output_name}")
+                else:
+                    copy_statement = f"""
+                    COPY ({main_query})
+                    TO '{output_path}' ({", ".join(copy_options)});
+                    """
+                    logger.debug(f"Executing SQL: {copy_statement}")
+                    con.execute(copy_statement)
 
                 logger.info(f"Successfully converted to: {output_path}")
                 return output_path

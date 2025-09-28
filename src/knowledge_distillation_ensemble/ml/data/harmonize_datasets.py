@@ -137,7 +137,7 @@ class DatasetHarmonizer:
 
         lf = pl.scan_parquet(parquet_file).pipe(self._rename_columns)
 
-        # Map column names to normalized versions
+        # Map column names to actual normalized versions from CICIOT2023
         flow_duration = self._first_present_column(lf, "flow_duration")
         rate = self._first_present_column(lf, "rate")
         srate = self._first_present_column(lf, "srate")
@@ -147,28 +147,37 @@ class DatasetHarmonizer:
         pmax = self._first_present_column(lf, "max")
         pmean = self._first_present_column(lf, "avg")
         pstd = self._first_present_column(lf, "std")
-        tot_sum = self._first_present_column(lf, "tot sum")
-        tot_size = self._first_present_column(lf, "tot size")
-        header_len = self._first_present_column(lf, "header_length", "header length")
+        tot_sum = self._first_present_column(
+            lf, "tot_sum"
+        )  # Note: "Tot sum" becomes "tot_sum"
+        tot_size = self._first_present_column(
+            lf, "tot_size"
+        )  # Note: "Tot size" becomes "tot_size"
+        header_len = self._first_present_column(
+            lf, "header_length"
+        )  # Note: "Header_Length" becomes "header_length"
         number = self._first_present_column(lf, "number")
-        label = self._first_present_column(lf, "label") or "label"
+        label = self._first_present_column(lf, "label")
 
         # Helper for safe column reference
-        c = lambda n: pl.col(n) if n else pl.lit(None)
+        def safe_col(col_name):
+            return pl.col(col_name) if col_name else pl.lit(None)
 
         return lf.select(
             [
-                c(flow_duration).alias("flow_duration"),
-                c(rate).alias("flow_packets_per_second"),
-                c(srate).alias("forward_packets_per_second"),
-                c(drate).alias("backward_packets_per_second"),
-                c(iat).alias("flow_iat_mean"),
-                c(pmin).alias("packet_length_min"),
-                c(pmax).alias("packet_length_max"),
-                c(pmean).alias("packet_length_mean"),
-                c(pstd).alias("packet_length_std"),
-                self._safe_diff(c(pmax), c(pmin)).alias("packet_length_range"),
-                # TCP Flags (binarized)
+                safe_col(flow_duration).alias("flow_duration"),
+                safe_col(rate).alias("flow_packets_per_second"),
+                safe_col(srate).alias("forward_packets_per_second"),
+                safe_col(drate).alias("backward_packets_per_second"),
+                safe_col(iat).alias("flow_iat_mean"),
+                safe_col(pmin).alias("packet_length_min"),
+                safe_col(pmax).alias("packet_length_max"),
+                safe_col(pmean).alias("packet_length_mean"),
+                safe_col(pstd).alias("packet_length_std"),
+                self._safe_diff(safe_col(pmax), safe_col(pmin)).alias(
+                    "packet_length_range"
+                ),
+                # TCP Flags (binarized) - using the correct normalized names
                 self._binarize_flags(lf, "fin_flag_number", "fin_count").alias(
                     "fin_flag_count"
                 ),
@@ -186,19 +195,16 @@ class DatasetHarmonizer:
                 self._binarize_flags(lf, "cwr_flag_number").alias("cwr_flag_count"),
                 self._binarize_flags(lf, "urg_count").alias("urg_flag_count"),
                 # Volume metrics
-                c(number).alias("total_packets"),
-                c(tot_sum).alias("total_bytes"),
-                c(tot_size).alias("average_packet_size"),
-                self._safe_divide(c(tot_sum), c(flow_duration)).alias(
-                    "flow_bytes_per_second"
-                ),
-                c(header_len).alias("header_length_total"),
-                c(label).cast(pl.Utf8).alias("label"),
-            ]
-        ).select(
-            [
-                pl.col(col) if col in self.COMMON_FEATURES else pl.lit(None).alias(col)
-                for col in self.COMMON_FEATURES
+                safe_col(number).alias("total_packets"),
+                safe_col(tot_sum).alias("total_bytes"),
+                safe_col(tot_size).alias("average_packet_size"),
+                # For zero duration flows, set flow_bytes_per_second to 0 instead of null
+                pl.when(safe_col(flow_duration) > 0)
+                .then(safe_col(tot_sum) / safe_col(flow_duration))
+                .otherwise(pl.lit(0.0))
+                .alias("flow_bytes_per_second"),
+                safe_col(header_len).alias("header_length_total"),
+                safe_col(label).cast(pl.Utf8).alias("label"),
             ]
         )
 
@@ -211,86 +217,96 @@ class DatasetHarmonizer:
 
         lf = pl.scan_parquet(parquet_file).pipe(self._rename_columns)
 
-        # Map columns
-        flow_duration = self._first_present_column(lf, "flow duration")
-        flow_pkts_s = self._first_present_column(lf, "flow packets_s")
-        fwd_pkts_s = self._first_present_column(lf, "fwd packets_s")
-        bwd_pkts_s = self._first_present_column(lf, "bwd packets_s")
-        flow_iat_mean = self._first_present_column(lf, "flow iat mean")
+        # Map columns using actual normalized names from CIC DIAD 2024
+        flow_duration = self._first_present_column(lf, "flow_duration")
+        flow_pkts_s = self._first_present_column(
+            lf, "flow_packets_per_s"
+        )  # Fixed: was "flow packets_s"
+        fwd_pkts_s = self._first_present_column(
+            lf, "fwd_packets_per_s"
+        )  # Fixed: was "fwd packets_s"
+        bwd_pkts_s = self._first_present_column(
+            lf, "bwd_packets_per_s"
+        )  # Fixed: was "bwd packets_s"
+        flow_iat_mean = self._first_present_column(lf, "flow_iat_mean")
 
-        pmin = self._first_present_column(lf, "packet length min")
-        pmax = self._first_present_column(lf, "packet length max")
-        pmean = self._first_present_column(lf, "packet length mean")
-        pstd = self._first_present_column(lf, "packet length std")
+        pmin = self._first_present_column(lf, "packet_length_min")
+        pmax = self._first_present_column(lf, "packet_length_max")
+        pmean = self._first_present_column(lf, "packet_length_mean")
+        pstd = self._first_present_column(lf, "packet_length_std")
 
-        # TCP flags
-        fin = self._first_present_column(lf, "fin flag count")
-        syn = self._first_present_column(lf, "syn flag count")
-        rst = self._first_present_column(lf, "rst flag count")
-        psh = self._first_present_column(lf, "psh flag count")
-        ack = self._first_present_column(lf, "ack flag count")
-        ece = self._first_present_column(lf, "ece flag count")
-        cwr = self._first_present_column(lf, "cwr flag count")
-        urg = self._first_present_column(lf, "urg flag count")
+        # TCP flags - using correct normalized names
+        fin = self._first_present_column(lf, "fin_flag_count")
+        syn = self._first_present_column(lf, "syn_flag_count")
+        rst = self._first_present_column(lf, "rst_flag_count")
+        psh = self._first_present_column(lf, "psh_flag_count")
+        ack = self._first_present_column(lf, "ack_flag_count")
+        ece = self._first_present_column(lf, "ece_flag_count")
+        cwr = self._first_present_column(lf, "cwr_flag_count")
+        urg = self._first_present_column(lf, "urg_flag_count")
 
-        # Volume metrics
-        total_fwd_pkts = self._first_present_column(lf, "total fwd packet")
-        total_bwd_pkts = self._first_present_column(lf, "total bwd packets")
-        total_len_fwd = self._first_present_column(lf, "total length of fwd packet")
-        total_len_bwd = self._first_present_column(lf, "total length of bwd packet")
-        avg_pkt_size = self._first_present_column(lf, "average packet size")
-        flow_bytes_s = self._first_present_column(lf, "flow bytes_s")
-        fwd_hdr_len = self._first_present_column(lf, "fwd header length")
-        bwd_hdr_len = self._first_present_column(lf, "bwd header length")
-        label = self._first_present_column(lf, "label") or "label"
+        # Volume metrics - using correct normalized names
+        total_fwd_pkts = self._first_present_column(lf, "total_fwd_packet")
+        total_bwd_pkts = self._first_present_column(lf, "total_bwd_packets")
+        total_len_fwd = self._first_present_column(lf, "total_length_of_fwd_packet")
+        total_len_bwd = self._first_present_column(lf, "total_length_of_bwd_packet")
+        avg_pkt_size = self._first_present_column(lf, "average_packet_size")
+        flow_bytes_s = self._first_present_column(
+            lf, "flow_bytes_per_s"
+        )  # Fixed: was "flow bytes_s"
+        fwd_hdr_len = self._first_present_column(lf, "fwd_header_length")
+        bwd_hdr_len = self._first_present_column(lf, "bwd_header_length")
+        label = self._first_present_column(lf, "label")
 
-        c = lambda n: pl.col(n) if n else pl.lit(None)
+        def safe_col(col_name):
+            return pl.col(col_name) if col_name else pl.lit(None)
 
         return lf.select(
             [
-                c(flow_duration).alias("flow_duration"),
-                c(flow_pkts_s).alias("flow_packets_per_second"),
-                c(fwd_pkts_s).alias("forward_packets_per_second"),
-                c(bwd_pkts_s).alias("backward_packets_per_second"),
-                c(flow_iat_mean).alias("flow_iat_mean"),
-                c(pmin).alias("packet_length_min"),
-                c(pmax).alias("packet_length_max"),
-                c(pmean).alias("packet_length_mean"),
-                c(pstd).alias("packet_length_std"),
-                self._safe_diff(c(pmax), c(pmin)).alias("packet_length_range"),
-                # TCP Flags (binarized)
-                self._binarize_flags(lf, fin).alias("fin_flag_count"),
-                self._binarize_flags(lf, syn).alias("syn_flag_count"),
-                self._binarize_flags(lf, rst).alias("rst_flag_count"),
-                self._binarize_flags(lf, psh).alias("psh_flag_count"),
-                self._binarize_flags(lf, ack).alias("ack_flag_count"),
-                self._binarize_flags(lf, ece).alias("ece_flag_count"),
-                self._binarize_flags(lf, cwr).alias("cwr_flag_count"),
-                self._binarize_flags(lf, urg).alias("urg_flag_count"),
-                # Volume metrics (composite)
-                self._safe_sum(c(total_fwd_pkts), c(total_bwd_pkts)).alias(
-                    "total_packets"
+                safe_col(flow_duration).alias("flow_duration"),
+                safe_col(flow_pkts_s).alias("flow_packets_per_second"),
+                safe_col(fwd_pkts_s).alias("forward_packets_per_second"),
+                safe_col(bwd_pkts_s).alias("backward_packets_per_second"),
+                safe_col(flow_iat_mean).alias("flow_iat_mean"),
+                safe_col(pmin).alias("packet_length_min"),
+                safe_col(pmax).alias("packet_length_max"),
+                safe_col(pmean).alias("packet_length_mean"),
+                safe_col(pstd).alias("packet_length_std"),
+                self._safe_diff(safe_col(pmax), safe_col(pmin)).alias(
+                    "packet_length_range"
                 ),
-                self._safe_sum(c(total_len_fwd), c(total_len_bwd)).alias("total_bytes"),
-                c(avg_pkt_size).alias("average_packet_size"),
-                pl.when(c(flow_bytes_s).is_not_null())
-                .then(c(flow_bytes_s))
+                # TCP Flags (binarized) - no need to call _binarize_flags since these are already counts
+                safe_col(fin).alias("fin_flag_count"),
+                safe_col(syn).alias("syn_flag_count"),
+                safe_col(rst).alias("rst_flag_count"),
+                safe_col(psh).alias("psh_flag_count"),
+                safe_col(ack).alias("ack_flag_count"),
+                safe_col(ece).alias("ece_flag_count"),
+                safe_col(cwr).alias("cwr_flag_count"),
+                safe_col(urg).alias("urg_flag_count"),
+                # Volume metrics (composite)
+                self._safe_sum(
+                    safe_col(total_fwd_pkts), safe_col(total_bwd_pkts)
+                ).alias("total_packets"),
+                self._safe_sum(safe_col(total_len_fwd), safe_col(total_len_bwd)).alias(
+                    "total_bytes"
+                ),
+                safe_col(avg_pkt_size).alias("average_packet_size"),
+                pl.when(safe_col(flow_bytes_s).is_not_null())
+                .then(safe_col(flow_bytes_s))
                 .otherwise(
                     self._safe_divide(
-                        self._safe_sum(c(total_len_fwd), c(total_len_bwd)),
-                        c(flow_duration),
+                        self._safe_sum(
+                            safe_col(total_len_fwd), safe_col(total_len_bwd)
+                        ),
+                        safe_col(flow_duration),
                     )
                 )
                 .alias("flow_bytes_per_second"),
-                self._safe_sum(c(fwd_hdr_len), c(bwd_hdr_len)).alias(
+                self._safe_sum(safe_col(fwd_hdr_len), safe_col(bwd_hdr_len)).alias(
                     "header_length_total"
                 ),
-                c(label).cast(pl.Utf8).alias("label"),
-            ]
-        ).select(
-            [
-                pl.col(col) if col in self.COMMON_FEATURES else pl.lit(None).alias(col)
-                for col in self.COMMON_FEATURES
+                safe_col(label).cast(pl.Utf8).alias("label"),
             ]
         )
 
