@@ -124,7 +124,6 @@ def _(DatasetExtractor):
             print(f"  ... and {remaining} more files")
     else:
         print("  No files found")
-
     return cicdiad2024_files, ciciot2023_files
 
 
@@ -348,24 +347,18 @@ def _(mo):
 
 
 @app.cell
-def _(ciciot2023_combined_path, get_dataset_preview, mo):
+def _(ciciot2023_combined_path, get_dataset_preview):
     # Get CICIOT 2023 dataset preview
-    ciciot2023_preview = get_dataset_preview(ciciot2023_combined_path)
-    if ciciot2023_preview is not None:
-        ciciot2023_preview
-    else:
-        mo.md("CICIOT 2023 dataset not available for preview.")
+    ciciot2023_preview = get_dataset_preview(ciciot2023_combined_path, 100000)
+    ciciot2023_preview
     return
 
 
 @app.cell
-def _(cicdiad2024_combined_path, get_dataset_preview, mo):
+def _(cicdiad2024_combined_path, get_dataset_preview):
     # Get CIC DIAD 2024 dataset preview
-    cicdiad2024_preview = get_dataset_preview(cicdiad2024_combined_path)
-    if cicdiad2024_preview is not None:
-        mo.ui.table(cicdiad2024_preview)
-    else:
-        mo.md("CIC DIAD 2024 dataset not available for preview.")
+    cicdiad2024_preview = get_dataset_preview(cicdiad2024_combined_path, 100000)
+    cicdiad2024_preview
     return
 
 
