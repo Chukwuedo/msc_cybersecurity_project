@@ -216,53 +216,51 @@ def _(DatasetAnalyzer, cicdiad2024_combined_path, ciciot2023_combined_path):
     # Extract complete column lists from both datasets
     ciciot2023_columns = []
     cicdiad2024_columns = []
-    
+
     if ciciot2023_combined_path and ciciot2023_combined_path.exists():
         print("=== CICIOT 2023 COMPLETE COLUMN LIST ===")
         analyzer_2023 = DatasetAnalyzer(ciciot2023_combined_path)
-        ciciot2023_columns = analyzer_2023.get_basic_stats()['column_names']
-        
+        ciciot2023_columns = analyzer_2023.get_basic_stats()["column_names"]
+
         print(f"Total columns: {len(ciciot2023_columns)}")
         print("All columns:")
         for col_idx1, col_name1 in enumerate(ciciot2023_columns, 1):
             print(f"  {col_idx1:2d}. {col_name1}")
-    
+
     if cicdiad2024_combined_path and cicdiad2024_combined_path.exists():
         print("\n=== CIC DIAD 2024 COMPLETE COLUMN LIST ===")
         analyzer_2024 = DatasetAnalyzer(cicdiad2024_combined_path)
-        cicdiad2024_columns = analyzer_2024.get_basic_stats()['column_names']
-        
+        cicdiad2024_columns = analyzer_2024.get_basic_stats()["column_names"]
+
         print(f"Total columns: {len(cicdiad2024_columns)}")
         print("All columns:")
         for col_idx2, col_name2 in enumerate(cicdiad2024_columns, 1):
             print(f"  {col_idx2:2d}. {col_name2}")
-    
+
     return cicdiad2024_columns, ciciot2023_columns
 
 
 @app.cell
 def _(cicdiad2024_columns, ciciot2023_columns, mo):
     # Create markdown documentation of all columns for reference
-    
+
     # Build CICIOT 2023 column list
     ciciot_md = (
-        f"**CICIOT 2023 Dataset Columns ({len(ciciot2023_columns)} "
-        f"total):**\n\n"
+        f"**CICIOT 2023 Dataset Columns ({len(ciciot2023_columns)} total):**\n\n"
     )
     for md_idx1, md_col1 in enumerate(ciciot2023_columns, 1):
         ciciot_md += f"{md_idx1}. `{md_col1}`\n"
-    
+
     # Build CIC DIAD 2024 column list
     cicdiad_md = (
-        f"\n**CIC DIAD 2024 Dataset Columns ({len(cicdiad2024_columns)} "
-        f"total):**\n\n"
+        f"\n**CIC DIAD 2024 Dataset Columns ({len(cicdiad2024_columns)} total):**\n\n"
     )
     for md_idx2, md_col2 in enumerate(cicdiad2024_columns, 1):
         cicdiad_md += f"{md_idx2}. `{md_col2}`\n"
-    
+
     # Combine into single markdown
     complete_column_reference = ciciot_md + cicdiad_md
-    
+
     mo.md(complete_column_reference)
     return complete_column_reference
 
@@ -270,24 +268,22 @@ def _(cicdiad2024_columns, ciciot2023_columns, mo):
 @app.cell
 def _(cicdiad2024_columns, ciciot2023_columns, mo):
     # Additional analysis for column overlap and differences
-    
+
     # Find any potential column matches (case-insensitive or similar names)
     ciciot_lower = {
-        norm_col.lower().replace(' ', '_').replace('-', '_'): norm_col
+        norm_col.lower().replace(" ", "_").replace("-", "_"): norm_col
         for norm_col in ciciot2023_columns
     }
     cicdiad_lower = {
-        norm_col.lower().replace(' ', '_').replace('-', '_'): norm_col
+        norm_col.lower().replace(" ", "_").replace("-", "_"): norm_col
         for norm_col in cicdiad2024_columns
     }
-    
+
     potential_matches = []
     for normalized, original_ciciot in ciciot_lower.items():
         if normalized in cicdiad_lower:
-            potential_matches.append(
-                (original_ciciot, cicdiad_lower[normalized])
-            )
-    
+            potential_matches.append((original_ciciot, cicdiad_lower[normalized]))
+
     analysis_md = f"""
     #### Column Analysis Summary
     
@@ -298,12 +294,12 @@ def _(cicdiad2024_columns, ciciot2023_columns, mo):
     - Potential semantic matches: {len(potential_matches)}
     
     """
-    
+
     if potential_matches:
         analysis_md += "**Potential Semantic Matches:**\n\n"
         for ciciot_col, cicdiad_col in potential_matches:
             analysis_md += f"- `{ciciot_col}` ↔ `{cicdiad_col}`\n"
-    
+
     analysis_md += """
     **Key Observations:**
     - CICIOT 2023 uses shorter, more abbreviated column names
@@ -314,7 +310,7 @@ def _(cicdiad2024_columns, ciciot2023_columns, mo):
     - Feature mapping will be required for cross-dataset analysis and
       domain adaptation
     """
-    
+
     mo.md(analysis_md)
     return analysis_md, potential_matches
 
