@@ -195,9 +195,15 @@ class LabelHarmonizer:
 
         # Create a new column 'original_label' with the original labels
         if not remove_original:
-            result_df = result_df.with_columns(
-                pl.col(original_label_col).alias("original_label")
-            )
+            if "original_label" not in result_df.columns:
+                result_df = result_df.with_columns(
+                    pl.col(original_label_col).alias("original_label")
+                )
+                self.logger.info("Created 'original_label' column from original labels")
+            else:
+                self.logger.info(
+                    "'original_label' column already exists; preserving existing values"
+                )
 
         # Replace the original label column with the harmonized labels
         result_df = result_df.with_columns(
