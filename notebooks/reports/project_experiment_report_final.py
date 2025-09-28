@@ -288,5 +288,29 @@ def _():
     return
 
 
+@app.cell
+def _(DatasetReporter, ciciot2023_combined_path):
+    # Display CICIOT 2023 dataset preview in tabular form
+    if ciciot2023_combined_path and ciciot2023_combined_path.exists():
+        DatasetReporter.print_dataset_preview(
+            ciciot2023_combined_path, "CICIOT 2023 Dataset"
+        )
+    else:
+        print("CICIOT 2023 dataset not available for preview.")
+    return
+
+
+@app.cell
+def _(DatasetReporter, cicdiad2024_combined_path):
+    # Display CIC DIAD 2024 dataset preview in tabular form
+    if cicdiad2024_combined_path and cicdiad2024_combined_path.exists():
+        DatasetReporter.print_dataset_preview(
+            cicdiad2024_combined_path, "CIC DIAD 2024 Dataset"
+        )
+    else:
+        print("CIC DIAD 2024 dataset not available for preview.")
+    return
+
+
 if __name__ == "__main__":
     app.run()

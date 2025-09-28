@@ -9,13 +9,6 @@ app = marimo.App(
 )
 
 
-@app.cell
-def _():
-    import marimo as mo
-
-    return (mo,)
-
-
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""## Project Experiment Report""")
@@ -42,6 +35,12 @@ def _(mo):
 
 @app.cell
 def _():
+    import marimo as mo
+    return (mo,)
+
+
+@app.cell
+def _():
     import sys
     from pathlib import Path
 
@@ -62,9 +61,9 @@ def _():
     )
     from src.utils.reporting import DatasetReporter
     from src.knowledge_distillation_ensemble.config.settings import Settings
-
     return (
         DataConverter,
+        DatasetAnalyzer,
         DatasetComparator,
         DatasetExtractor,
         DatasetReporter,
@@ -108,7 +107,6 @@ def _(DatasetExtractor, DatasetReporter):
     DatasetReporter.print_file_list(
         cicdiad2024_files, "CIC DIAD 2024 Files", max_files=3
     )
-
     return cicdiad2024_files, ciciot2023_files
 
 
@@ -146,7 +144,6 @@ def _(DataConverter, DatasetReporter, cicdiad2024_files, ciciot2023_files):
     DatasetReporter.print_conversion_status(
         "CIC DIAD 2024 Combined", cicdiad2024_files, cicdiad2024_combined_path
     )
-
     return cicdiad2024_combined_path, ciciot2023_combined_path
 
 
@@ -201,7 +198,6 @@ def _(DatasetComparator, cicdiad2024_combined_path, ciciot2023_combined_path):
     else:
         print("Cannot compare datasets - one or both files not available")
         comparator = None
-
     return
 
 
@@ -236,7 +232,6 @@ def _(DatasetAnalyzer, cicdiad2024_combined_path, ciciot2023_combined_path):
         print("All columns:")
         for col_idx2, col_name2 in enumerate(cicdiad2024_columns, 1):
             print(f"  {col_idx2:2d}. {col_name2}")
-
     return cicdiad2024_columns, ciciot2023_columns
 
 
@@ -262,7 +257,7 @@ def _(cicdiad2024_columns, ciciot2023_columns, mo):
     complete_column_reference = ciciot_md + cicdiad_md
 
     mo.md(complete_column_reference)
-    return complete_column_reference
+    return
 
 
 @app.cell
@@ -286,13 +281,13 @@ def _(cicdiad2024_columns, ciciot2023_columns, mo):
 
     analysis_md = f"""
     #### Column Analysis Summary
-    
+
     **Dataset Comparison:**
     - CICIOT 2023: {len(ciciot2023_columns)} columns
     - CIC DIAD 2024: {len(cicdiad2024_columns)} columns
     - Exact matches: 0 (as expected - different collection methodologies)
     - Potential semantic matches: {len(potential_matches)}
-    
+
     """
 
     if potential_matches:
@@ -312,7 +307,7 @@ def _(cicdiad2024_columns, ciciot2023_columns, mo):
     """
 
     mo.md(analysis_md)
-    return analysis_md, potential_matches
+    return
 
 
 @app.cell
@@ -333,8 +328,7 @@ def _(DatasetAnalyzer, DatasetReporter, ciciot2023_combined_path):
     else:
         ciciot2023_preview = None
         print("CICIOT 2023 dataset not available for preview")
-
-    return (ciciot2023_preview,)
+    return
 
 
 @app.cell
@@ -349,29 +343,28 @@ def _(DatasetAnalyzer, DatasetReporter, cicdiad2024_combined_path):
     else:
         cicdiad2024_preview = None
         print("CIC DIAD 2024 dataset not available for preview")
-
-    return (cicdiad2024_preview,)
+    return
 
 
 @app.cell
-def _(cicdiad2024_preview, ciciot2023_preview, mo):
+def _(mo):
     # Summary of key findings from exploratory data analysis
 
     eda_summary = """
     #### Key EDA Findings
-    
+
     **CICIOT 2023 Dataset Characteristics:**
     - Primarily numeric features (Float64 types)
     - Minimal categorical data
     - Focus on IoT network behavior patterns
     - Features appear to be engineered/aggregated metrics
-    
+
     **CIC DIAD 2024 Dataset Characteristics:**
     - Mix of numeric (Float64/Int64) and categorical (String) features
     - More detailed flow-level information
     - Includes metadata like IP addresses, timestamps, protocols
     - Raw network flow features with computed statistics
-    
+
     **Data Quality Observations:**
     - Both datasets have 0% missing values (excellent completeness)
     - Large scale datasets (46M+ and 19M+ rows respectively)
@@ -380,7 +373,7 @@ def _(cicdiad2024_preview, ciciot2023_preview, mo):
     """
 
     mo.md(eda_summary)
-    return (eda_summary,)
+    return
 
 
 @app.cell

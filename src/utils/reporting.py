@@ -168,6 +168,52 @@ class DatasetReporter:
         print("-" * 80)
 
     @staticmethod
+    def print_dataset_preview(dataset_path, dataset_name: str, n_rows: int = 5) -> None:
+        """Print dataset preview in tabular format.
+
+        Args:
+            dataset_path: Path to the dataset file
+            dataset_name: Name of the dataset for the header
+            n_rows: Number of rows to preview
+        """
+        try:
+            import polars as pl
+
+            print(f"\n=== {dataset_name.upper()} PREVIEW ===")
+
+            # Read the dataset
+            df = pl.read_parquet(dataset_path)
+
+            # Get basic info
+            rows_count = df.shape[0]
+            cols_count = df.shape[1]
+            print(f"Dataset Shape: {rows_count:,} rows × {cols_count} columns")
+
+            # Get sample data
+            sample_df = df.head(n_rows)
+
+            # Convert to list format for create_simple_table
+            headers = df.columns
+            rows = []
+
+            for i in range(len(sample_df)):
+                row_data = []
+                for col in headers:
+                    value = sample_df[col][i]
+                    # Truncate long values for readability
+                    str_val = str(value)
+                    if len(str_val) > 20:
+                        str_val = str_val[:17] + "..."
+                    row_data.append(str_val)
+                rows.append(row_data)
+
+            # Use create_simple_table for proper tabular display
+            create_simple_table(headers, rows, f"First {n_rows} rows:")
+
+        except (FileNotFoundError, ImportError, ValueError) as e:
+            print(f"Error displaying preview for {dataset_name}: {e}")
+
+    @staticmethod
     def print_comparison_table(
         dataset1_stats: Dict[str, Any], dataset2_stats: Dict[str, Any]
     ) -> None:
@@ -251,11 +297,12 @@ def format_file_size(size_bytes: int) -> str:
     Returns:
         Formatted size string (e.g., "1.5 MB", "3.2 GB")
     """
+    size = float(size_bytes)
     for unit in ["B", "KB", "MB", "GB", "TB"]:
-        if size_bytes < 1024.0:
-            return f"{size_bytes:.1f} {unit}"
-        size_bytes /= 1024.0
-    return f"{size_bytes:.1f} PB"
+        if size < 1024.0:
+            return f"{size:.1f} {unit}"
+        size /= 1024.0
+    return f"{size:.1f} PB"
 
 
 def format_number(num: int) -> str:
@@ -291,15 +338,17 @@ def create_simple_table(
                 col_widths[col_idx] = max(col_widths[col_idx], len(str(cell)))
 
     # Print header
-    header_line = " | ".join(
+    header_parts = [
         header.ljust(col_widths[col_idx]) for col_idx, header in enumerate(headers)
-    )
+    ]
+    header_line = " | ".join(header_parts)
     print(header_line)
     print("-" * len(header_line))
 
     # Print rows
     for row in rows:
-        row_line = " | ".join(
+        row_parts = [
             str(cell).ljust(col_widths[col_idx]) for col_idx, cell in enumerate(row)
-        )
+        ]
+        row_line = " | ".join(row_parts)
         print(row_line)
