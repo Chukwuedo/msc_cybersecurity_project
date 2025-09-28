@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 class DataConverter:
     """Handles data format conversion and optimization."""
 
-    def __init__(self, memory_limit: str = "1GB", threads: Optional[int] = None):
+    def __init__(self, memory_limit: str = "15GB", threads: Optional[int] = None):
         """
         Initialize the data converter.
 
@@ -40,6 +40,10 @@ class DataConverter:
         con.execute("INSTALL httpfs; LOAD httpfs;")
         con.execute("PRAGMA enable_object_cache=true;")
         con.execute(f"PRAGMA memory_limit='{self.memory_limit}';")
+
+        # Additional optimizations for large datasets
+        con.execute("PRAGMA temp_directory='/tmp';")  # Use tmp for spill
+        con.execute("PRAGMA checkpoint_threshold='1GB';")  # Checkpoints
 
         if self.threads:
             con.execute(f"PRAGMA threads={self.threads};")
@@ -69,6 +73,12 @@ class DataConverter:
         """
         output_path = self.output_dir / f"{output_name}.parquet"
 
+        # Check if Parquet file already exists
+        if output_path.exists():
+            logger.info(f"Parquet file already exists: {output_path}")
+            logger.info("Skipping conversion. Delete the file to reconvert.")
+            return output_path
+
         # Handle different input types
         if isinstance(csv_paths, (str, Path)):
             csv_pattern = str(csv_paths)
@@ -85,33 +95,34 @@ class DataConverter:
                 self._setup_duckdb_connection(con)
 
                 # Build the SQL query
-                select_clause = "*"
-                if sample_rows:
-                    select_clause = f"* LIMIT {sample_rows}"
-
                 where_clause = ""
                 if filter_query:
                     where_clause = f"WHERE {filter_query}"
+
+                limit_clause = ""
+                if sample_rows:
+                    limit_clause = f"LIMIT {sample_rows}"
 
                 if isinstance(csv_pattern, list):
                     # Handle multiple files
                     union_queries = []
                     for csv_file in csv_pattern:
                         union_queries.append(
-                            f"SELECT {select_clause} FROM "
+                            f"SELECT * FROM "
                             f"read_csv_auto('{csv_file}', sample_size=-1) "
                             f"{where_clause}"
                         )
                     main_query = " UNION ALL ".join(union_queries)
+                    if limit_clause:
+                        main_query = f"({main_query}) {limit_clause}"
                 else:
                     # Handle single file or glob pattern
                     main_query = f"""
-                    SELECT {select_clause}
+                    SELECT *
                     FROM read_csv_auto('{csv_pattern}', sample_size=-1)
                     {where_clause}
-                    """
-
-                # Build COPY statement
+                    {limit_clause}
+                    """  # Build COPY statement
                 copy_options = ["FORMAT PARQUET", "COMPRESSION ZSTD"]
 
                 if partition_by:

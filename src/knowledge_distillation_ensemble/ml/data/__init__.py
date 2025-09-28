@@ -10,9 +10,4 @@ This package contains modules for:
 from .extract_data import DatasetExtractor, extractor
 from .convert_data import DataConverter, converter
 
-__all__ = [
-    "DatasetExtractor",
-    "extractor",
-    "DataConverter",
-    "converter"
-]
+__all__ = ["DatasetExtractor", "extractor", "DataConverter", "converter"]
