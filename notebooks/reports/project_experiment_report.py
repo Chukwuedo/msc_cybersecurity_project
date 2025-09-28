@@ -54,21 +54,21 @@ def _():
         DatasetExtractor,
     )
     from src.knowledge_distillation_ensemble.ml.data.convert_data import DataConverter
-    from src.ml.evaluation.dataset_analyzer import (
+    from src.knowledge_distillation_ensemble.ml.data.dataset_analyzer import (
         DatasetAnalyzer,
         DatasetComparator,
         analyze_dataset_file,
+        get_dataset_preview,
     )
-    from src.utils.reporting import DatasetReporter
     from src.knowledge_distillation_ensemble.config.settings import Settings
     return (
         DataConverter,
         DatasetAnalyzer,
         DatasetComparator,
         DatasetExtractor,
-        DatasetReporter,
         Settings,
         analyze_dataset_file,
+        get_dataset_preview,
     )
 
 
@@ -89,11 +89,11 @@ def _(mo):
 
 
 @app.cell
-def _(DatasetExtractor, DatasetReporter):
+def _(DatasetExtractor):
     # Initialize extractor and download datasets
     extractor = DatasetExtractor()
 
-    DatasetReporter.print_section_header("Downloading Datasets")
+    print("=== DOWNLOADING DATASETS ===")
 
     # Download datasets if needed
     extractor.download_datasets()
@@ -103,10 +103,26 @@ def _(DatasetExtractor, DatasetReporter):
     cicdiad2024_files = extractor.get_cicdiad2024_csv_files()
 
     # Report file counts
-    DatasetReporter.print_file_list(ciciot2023_files, "CICIOT 2023 Files", max_files=3)
-    DatasetReporter.print_file_list(
-        cicdiad2024_files, "CIC DIAD 2024 Files", max_files=3
-    )
+    print(f"\nCICIOT 2023 Files ({len(ciciot2023_files)} files):")
+    if ciciot2023_files:
+        for idx, file_path in enumerate(ciciot2023_files[:3], 1):
+            print(f"  {idx}. {file_path.name}")
+        if len(ciciot2023_files) > 3:
+            remaining = len(ciciot2023_files) - 3
+            print(f"  ... and {remaining} more files")
+    else:
+        print("  No files found")
+
+    print(f"\nCIC DIAD 2024 Files ({len(cicdiad2024_files)} files):")
+    if cicdiad2024_files:
+        for idx, file_path in enumerate(cicdiad2024_files[:3], 1):
+            print(f"  {idx}. {file_path.name}")
+        if len(cicdiad2024_files) > 3:
+            remaining = len(cicdiad2024_files) - 3
+            print(f"  ... and {remaining} more files")
+    else:
+        print("  No files found")
+
     return cicdiad2024_files, ciciot2023_files
 
 
@@ -117,11 +133,11 @@ def _(mo):
 
 
 @app.cell
-def _(DataConverter, DatasetReporter, cicdiad2024_files, ciciot2023_files):
+def _(DataConverter, cicdiad2024_files, ciciot2023_files):
     # Initialize converter and convert datasets
     converter = DataConverter()
 
-    DatasetReporter.print_section_header("Converting to Parquet Format")
+    print("=== CONVERTING TO PARQUET FORMAT ===")
 
     # Convert CICIOT 2023
     ciciot2023_combined_path = None
@@ -138,10 +154,23 @@ def _(DataConverter, DatasetReporter, cicdiad2024_files, ciciot2023_files):
         )
 
     # Report conversion status
-    DatasetReporter.print_conversion_status(
+    def print_conversion_status(name, source_files, target_path):
+        source_exists = source_files and len(list(source_files)) > 0
+        target_exists = target_path and target_path.exists()
+
+        if source_exists and target_exists:
+            print(f"✓ {name}: Ready")
+        elif source_exists and not target_exists:
+            print(f"⚠ {name}: Source found, needs conversion")
+        elif not source_exists and target_exists:
+            print(f"✓ {name}: Converted (source cleaned)")
+        else:
+            print(f"✗ {name}: Not available")
+
+    print_conversion_status(
         "CICIOT 2023 Combined", ciciot2023_files, ciciot2023_combined_path
     )
-    DatasetReporter.print_conversion_status(
+    print_conversion_status(
         "CIC DIAD 2024 Combined", cicdiad2024_files, cicdiad2024_combined_path
     )
     return cicdiad2024_combined_path, ciciot2023_combined_path
@@ -317,32 +346,24 @@ def _(mo):
 
 
 @app.cell
-def _(DatasetAnalyzer, DatasetReporter, ciciot2023_combined_path):
-    # Get comprehensive data preview for CICIOT 2023
-    if ciciot2023_combined_path and ciciot2023_combined_path.exists():
-        print("Getting CICIOT 2023 data preview...")
-        analyzer_preview_2023 = DatasetAnalyzer(ciciot2023_combined_path)
-        ciciot2023_preview = analyzer_preview_2023.get_data_preview(100)
-
-        DatasetReporter.print_data_preview(ciciot2023_preview, "CICIOT 2023")
+def _(ciciot2023_combined_path, get_dataset_preview, mo):
+    # Get CICIOT 2023 dataset preview
+    ciciot2023_preview = get_dataset_preview(ciciot2023_combined_path)
+    if ciciot2023_preview is not None:
+        ciciot2023_preview
     else:
-        ciciot2023_preview = None
-        print("CICIOT 2023 dataset not available for preview")
+        mo.md("CICIOT 2023 dataset not available for preview.")
     return
 
 
 @app.cell
-def _(DatasetAnalyzer, DatasetReporter, cicdiad2024_combined_path):
-    # Get comprehensive data preview for CIC DIAD 2024
-    if cicdiad2024_combined_path and cicdiad2024_combined_path.exists():
-        print("Getting CIC DIAD 2024 data preview...")
-        analyzer_preview_2024 = DatasetAnalyzer(cicdiad2024_combined_path)
-        cicdiad2024_preview = analyzer_preview_2024.get_data_preview(100)
-
-        DatasetReporter.print_data_preview(cicdiad2024_preview, "CIC DIAD 2024")
+def _(cicdiad2024_combined_path, get_dataset_preview, mo):
+    # Get CIC DIAD 2024 dataset preview
+    cicdiad2024_preview = get_dataset_preview(cicdiad2024_combined_path)
+    if cicdiad2024_preview is not None:
+        mo.ui.table(cicdiad2024_preview)
     else:
-        cicdiad2024_preview = None
-        print("CIC DIAD 2024 dataset not available for preview")
+        mo.md("CIC DIAD 2024 dataset not available for preview.")
     return
 
 
