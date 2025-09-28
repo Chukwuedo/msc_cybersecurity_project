@@ -110,6 +110,64 @@ class DatasetReporter:
                 print(f"    ... and {remaining} more")
 
     @staticmethod
+    def print_data_preview(preview_data: dict, dataset_name: str) -> None:
+        """Print a comprehensive data preview.
+
+        Args:
+            preview_data: Dictionary from DatasetAnalyzer.get_data_preview()
+            dataset_name: Name of the dataset for the header
+        """
+        print(f"\n=== {dataset_name.upper()} DATA PREVIEW ===")
+
+        sample_df = preview_data["sample_data"]
+        shape = preview_data["shape"]
+
+        print(f"Dataset Shape: {shape[0]:,} rows × {shape[1]} columns")
+        print(f"Preview: First {len(sample_df)} rows")
+
+        # Show sample data with better formatting
+        print("\nSample Data:")
+        print("-" * 80)
+
+        # Display first few rows in a clean format
+        for row_idx in range(min(5, len(sample_df))):
+            print(f"Row {row_idx + 1}:")
+            row_data = sample_df.row(row_idx, named=True)
+            for col_name, value in row_data.items():
+                # Truncate long values for readability
+                str_val = str(value)
+                if len(str_val) > 50:
+                    str_val = str_val[:47] + "..."
+                print(f"  {col_name}: {str_val}")
+            print()
+
+        # Show data types summary
+        dtypes = preview_data["column_dtypes"]
+        dtype_counts = {}
+        for dtype in dtypes.values():
+            dtype_counts[dtype] = dtype_counts.get(dtype, 0) + 1
+
+        print("Data Types Summary:")
+        for dtype, count in sorted(dtype_counts.items()):
+            print(f"  {dtype}: {count} columns")
+
+        # Show categorical info if available
+        categorical_info = preview_data.get("categorical_info", {})
+        if categorical_info:
+            print("\nCategorical Columns (top values):")
+            for col_name, value_counts in categorical_info.items():
+                if "count" in value_counts and len(value_counts["count"]) > 0:
+                    print(f"  {col_name}:")
+                    values = value_counts.get("count", [])
+                    categories = value_counts.get(col_name, [])
+                    for i, (cat, count) in enumerate(zip(categories[:3], values[:3])):
+                        print(f"    {cat}: {count}")
+                    if len(categories) > 3:
+                        print(f"    ... and {len(categories) - 3} more values")
+
+        print("-" * 80)
+
+    @staticmethod
     def print_comparison_table(
         dataset1_stats: Dict[str, Any], dataset2_stats: Dict[str, Any]
     ) -> None:

@@ -119,6 +119,54 @@ class DatasetAnalyzer:
         """
         return self.dataset.head(n_rows)
 
+    def get_data_preview(self, n_rows: int = 100) -> Dict[str, Any]:
+        """Get comprehensive data preview with sample and basic stats.
+
+        Args:
+            n_rows: Number of rows to include in preview
+
+        Returns:
+            Dictionary with sample data and basic analysis
+        """
+        df = self.dataset
+        sample_data = df.head(n_rows)
+
+        # Get basic statistics for numeric columns
+        numeric_stats = {}
+        try:
+            numeric_cols = [
+                col
+                for col in df.columns
+                if df[col].dtype in [pl.Float64, pl.Int64, pl.Float32, pl.Int32]
+            ]
+            if numeric_cols:
+                stats_df = df.select(numeric_cols).describe()
+                numeric_stats = stats_df.to_dict(as_series=False)
+        except Exception:  # noqa: BLE001
+            pass
+
+        # Get value counts for categorical/string columns
+        categorical_info = {}
+        try:
+            string_cols = [col for col in df.columns if df[col].dtype == pl.String][
+                :5
+            ]  # Limit to 5
+            for col in string_cols:
+                value_counts = df[col].value_counts().head(10)
+                categorical_info[col] = value_counts.to_dict(as_series=False)
+        except Exception:  # noqa: BLE001
+            pass
+
+        return {
+            "sample_data": sample_data,
+            "shape": df.shape,
+            "numeric_stats": numeric_stats,
+            "categorical_info": categorical_info,
+            "column_dtypes": {
+                col: str(dtype) for col, dtype in zip(df.columns, df.dtypes)
+            },
+        }
+
     def get_column_preview(self, max_columns: int = 15) -> List[str]:
         """Get a preview of column names.
 

@@ -317,6 +317,74 @@ def _(cicdiad2024_columns, ciciot2023_columns, mo):
 
 @app.cell
 def _(mo):
+    mo.md(r"""#### Exploratory Data Analysis""")
+    return
+
+
+@app.cell
+def _(DatasetAnalyzer, DatasetReporter, ciciot2023_combined_path):
+    # Get comprehensive data preview for CICIOT 2023
+    if ciciot2023_combined_path and ciciot2023_combined_path.exists():
+        print("Getting CICIOT 2023 data preview...")
+        analyzer_preview_2023 = DatasetAnalyzer(ciciot2023_combined_path)
+        ciciot2023_preview = analyzer_preview_2023.get_data_preview(100)
+
+        DatasetReporter.print_data_preview(ciciot2023_preview, "CICIOT 2023")
+    else:
+        ciciot2023_preview = None
+        print("CICIOT 2023 dataset not available for preview")
+
+    return (ciciot2023_preview,)
+
+
+@app.cell
+def _(DatasetAnalyzer, DatasetReporter, cicdiad2024_combined_path):
+    # Get comprehensive data preview for CIC DIAD 2024
+    if cicdiad2024_combined_path and cicdiad2024_combined_path.exists():
+        print("Getting CIC DIAD 2024 data preview...")
+        analyzer_preview_2024 = DatasetAnalyzer(cicdiad2024_combined_path)
+        cicdiad2024_preview = analyzer_preview_2024.get_data_preview(100)
+
+        DatasetReporter.print_data_preview(cicdiad2024_preview, "CIC DIAD 2024")
+    else:
+        cicdiad2024_preview = None
+        print("CIC DIAD 2024 dataset not available for preview")
+
+    return (cicdiad2024_preview,)
+
+
+@app.cell
+def _(cicdiad2024_preview, ciciot2023_preview, mo):
+    # Summary of key findings from exploratory data analysis
+
+    eda_summary = """
+    #### Key EDA Findings
+    
+    **CICIOT 2023 Dataset Characteristics:**
+    - Primarily numeric features (Float64 types)
+    - Minimal categorical data
+    - Focus on IoT network behavior patterns
+    - Features appear to be engineered/aggregated metrics
+    
+    **CIC DIAD 2024 Dataset Characteristics:**
+    - Mix of numeric (Float64/Int64) and categorical (String) features
+    - More detailed flow-level information
+    - Includes metadata like IP addresses, timestamps, protocols
+    - Raw network flow features with computed statistics
+    
+    **Data Quality Observations:**
+    - Both datasets have 0% missing values (excellent completeness)
+    - Large scale datasets (46M+ and 19M+ rows respectively)
+    - Different feature engineering approaches require careful mapping
+    - Ready for machine learning pipeline development
+    """
+
+    mo.md(eda_summary)
+    return (eda_summary,)
+
+
+@app.cell
+def _(mo):
     mo.md(r"""### Machine Learning Pipeline""")
     return
 
