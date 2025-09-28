@@ -61,14 +61,10 @@ def _():
         analyze_dataset_file,
         get_dataset_preview,
     )
-    from src.knowledge_distillation_ensemble.ml.data.harmonize_datasets import (
-        DatasetHarmonizer,
-    )
     from src.knowledge_distillation_ensemble.config.settings import Settings
     return (
         DatasetAnalyzer,
         DatasetComparator,
-        DatasetHarmonizer,
         Settings,
         analyze_dataset_file,
         get_dataset_preview,
@@ -443,7 +439,7 @@ def _(cicdiad2024_columns, ciciot2023_columns, mo):
 
     **Feature Mapping Strategy:**
 
-    Based on manual analysis, I've identified {len(feature_mapping_data)} common 
+    Based on manual analysis, I have identified {len(feature_mapping_data)} common 
     features that can be mapped between the datasets:
 
     - **Direct mappings** ({len([f for f in feature_mapping_data if f[3] == "direct"])} features): Identical concepts with different names
@@ -463,24 +459,22 @@ def _(cicdiad2024_columns, ciciot2023_columns, mo):
     """
 
     mo.md(analysis_md)
-    return (feature_mapping_data,)
+    return
 
 
 @app.cell
-def _(feature_mapping_data):
-    # Create detailed feature mapping table
-    import polars as pl
-
-    # Convert the mapping data to a DataFrame for better display
-    mapping_df = pl.DataFrame(
-        {
-            "Common Feature": [f[0] for f in feature_mapping_data],
-            "CICIOT2023 Features": [f[1] for f in feature_mapping_data],
-            "CICDIAD2024 Features": [f[2] for f in feature_mapping_data],
-            "Mapping Type": [f[3] for f in feature_mapping_data],
-            "Rationale": [f[4] for f in feature_mapping_data],
-        }
+def _():
+    # Display feature mapping table using module function for cleaner code
+    from src.knowledge_distillation_ensemble.ml.data.feature_mappings import (
+        get_feature_mapping_df,
     )
+
+    # Get the DataFrame from module (cleaner than manual construction)
+    mapping_df = get_feature_mapping_df()
+
+    print("Complete Feature Mapping Table:")
+    print(f"Showing {len(mapping_df)} feature mappings for cross-dataset alignment")
+    print("=" * 80)
 
     # Display the mapping table
     mapping_df
@@ -515,7 +509,7 @@ def _(get_dataset_preview, harmonized_diad_path):
     if harmonized_diad_path and harmonized_diad_path.exists():
         cicdiad2024_preview = get_dataset_preview(harmonized_diad_path, 100000)
     else:
-        print("⚠️ CIC DIAD 2024 harmonized dataset not available for preview")
+        print("CIC DIAD 2024 harmonized dataset not available for preview")
     return (cicdiad2024_preview,)
 
 
@@ -573,18 +567,17 @@ def _(mo):
         r"""
     #### Dataset Harmonization Implementation
 
-    Based on the feature mapping analysis above, I have implemented a
-    **DatasetHarmonizer** class in the supporting codebase that does the 
-    following:
+    Based on the feature mapping analysis above, dataset harmonization has been 
+    completed with the following approach:
 
     **Key Features:**
     - **Robust column matching**: Uses normalised names and multiple candidates
     - **Null-safe operations**: Handles missing values gracefully 
     - **Binarised flag encoding**: Converts TCP flag counts to 0/1 values
     - **Composite feature engineering**: Combines forward/backward directions
-    - **Lazy evaluation**: Memory-efficient processing with Polars LazyFrame
+    - **Memory-efficient processing**: Using Polars LazyFrame operations
 
-    **Output**: 24 harmonized features covering flow timing, packet statistics, 
+    **Output**: 23 harmonized features covering flow timing, packet statistics, 
     TCP flags, volume metrics, and labels as per the mapping analysis above.
     """
     )
@@ -592,36 +585,58 @@ def _(mo):
 
 
 @app.cell
-def _(DatasetHarmonizer, settings):
-    # Initialize harmonizer with processed parquet directory
-    harmonizer = DatasetHarmonizer(settings.processed_parquet_path)
-
-    print("DatasetHarmonizer initialized")
-    print(f"Output directory: {harmonizer.output_dir}")
-    print(f"Target schema: {len(harmonizer.COMMON_FEATURES)} features")
-    print("\nCommon features schema:")
-    for i, feature in enumerate(harmonizer.COMMON_FEATURES, 1):
-        print(f"  {i:2d}. {feature}")
-    return (harmonizer,)
+def _(settings):
+    # Note: Dataset harmonization completed - using existing revised parquet files
+    print("Harmonized Dataset Configuration")
+    print(f"Processed data directory: {settings.processed_parquet_path}")
+    print("Using pre-generated revised harmonized datasets")
+    return
 
 
 @app.cell
-def _(cicdiad2024_harmonized_path, ciciot2023_harmonized_path, harmonizer):
-    # Check for existing harmonized datasets or regenerate if needed
-    print("Dataset Harmonization Status...")
+def _(cicdiad2024_harmonized_path, ciciot2023_harmonized_path):
+    # Use existing revised harmonized datasets (streamlined - no regeneration needed)
+    from src.knowledge_distillation_ensemble.ml.data.dataset_analyzer import (
+        analyze_label_distributions,
+    )
+
+    print("Dataset Harmonization Status - Using Revised Files")
+    print("=" * 55)
 
     if ciciot2023_harmonized_path.exists() and cicdiad2024_harmonized_path.exists():
-        print("Harmonized datasets already exist")
+        print("Revised harmonized datasets available")
         harmonized_cic23_path = ciciot2023_harmonized_path
         harmonized_diad_path = cicdiad2024_harmonized_path
-    else:
-        print("Harmonized datasets not found. Regenerating from parquet files...")
-        # Process datasets from existing combined parquet files
-        harmonized_cic23_path, harmonized_diad_path = harmonizer.process_datasets()
-        print("Dataset harmonization completed successfully!")
 
-    print(f"CICIOT2023 harmonized: {harmonized_cic23_path}")
-    print(f"CIC DIAD 2024 harmonized: {harmonized_diad_path}")
+        # Quick validation using existing analyzer functions
+        print("\nQuick Validation:")
+        ciciot_analysis = analyze_label_distributions(harmonized_cic23_path, "label")
+        cicdiad_analysis = analyze_label_distributions(harmonized_diad_path, "label")
+
+        if "error" not in ciciot_analysis and "error" not in cicdiad_analysis:
+            print(
+                f"  • CICIOT2023: {ciciot_analysis['total_records']:,} records, {len(ciciot_analysis['unique_labels'])} label types"
+            )
+            print(
+                f"  • CICDIAD2024: {cicdiad_analysis['total_records']:,} records, {len(cicdiad_analysis['unique_labels'])} label types"
+            )
+
+            # Check for Mirai preservation
+            mirai_in_ciciot = "Mirai" in ciciot_analysis["unique_labels"]
+            mirai_in_cicdiad = "Mirai" in cicdiad_analysis["unique_labels"]
+            print(
+                f"  • Mirai category preserved: {'yes' if mirai_in_ciciot and mirai_in_cicdiad else 'no'}"
+            )
+        else:
+            print("Analysis validation encountered issues")
+    else:
+        print("Revised harmonized datasets not found!")
+        harmonized_cic23_path = None
+        harmonized_diad_path = None
+
+    print(f"\nDataset paths:")
+    print(f"  • CICIOT2023: {harmonized_cic23_path}")
+    print(f"  • CICDIAD2024: {harmonized_diad_path}")
     return harmonized_cic23_path, harmonized_diad_path
 
 
@@ -651,21 +666,6 @@ def _(analyze_dataset_file, harmonized_diad_path):
     return
 
 
-app._unparsable_cell(
-    r"""
-    # Show harmonized CIC DIAD 2024 preview
-    if harmonized_diad_path:
-        print(\"📊 CIC DIAD 2024 Harmonized Dataset Preview:\")
-        diad_harmonized = harmonizer.get_harmonized_preview(harmonized_diad_path, 10)
-        else:
-            mo.md(\"Dataset not available for preview\")
-    else:
-        mo.md(\"CIC DIAD 2024 harmonized dataset not generated\")
-    """,
-    name="_"
-)
-
-
 @app.cell
 def _(mo):
     mo.md(r"""##### Harmonized Dataset Previews""")
@@ -673,13 +673,14 @@ def _(mo):
 
 
 @app.cell
-def _(harmonized_cic23_path, harmonizer, mo):
+def _(get_dataset_preview, harmonized_cic23_path, mo):
     # Show harmonized CICIOT2023 preview
-    if harmonized_cic23_path:
+    if harmonized_cic23_path and harmonized_cic23_path.exists():
         print("CICIOT2023 Harmonized Dataset Preview:")
-        cic23_harmonized = harmonizer.get_harmonized_preview(harmonized_cic23_path, 10)
+        cic23_harmonized = get_dataset_preview(harmonized_cic23_path, 10)
     else:
-        mo.md("CICIOT2023 harmonized dataset not generated")
+        mo.md("CICIOT2023 harmonized dataset not available")
+        cic23_harmonized = None
     return (cic23_harmonized,)
 
 
@@ -690,13 +691,14 @@ def _(cic23_harmonized):
 
 
 @app.cell
-def _(harmonized_diad_path, harmonizer, mo):
+def _(get_dataset_preview, harmonized_diad_path, mo):
     # Show harmonized CICDIAD2024 preview
-    if harmonized_diad_path:
+    if harmonized_diad_path and harmonized_diad_path.exists():
         print("CICDIAD2024 Harmonized Dataset Preview:")
-        diad_harmonized = harmonizer.get_harmonized_preview(harmonized_diad_path, 10)
+        diad_harmonized = get_dataset_preview(harmonized_diad_path, 10)
     else:
-        mo.md("CICDIAD2024 harmonized dataset not generated")
+        mo.md("CICDIAD2024 harmonized dataset not available")
+        diad_harmonized = None
     return (diad_harmonized,)
 
 

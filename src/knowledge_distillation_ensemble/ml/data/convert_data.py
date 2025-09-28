@@ -55,11 +55,15 @@ class DataConverter:
         path = Path(file_path)
 
         # Define folder to label mappings for CIC DIAD 2024
+        # Updated to match actual folder structure in the dataset
         folder_mappings = {
             "dos": "DoS",
             "ddos": "DDoS",
             "brute force": "Brute_Force",
             "benign": "Benign",
+            "mirai": "Mirai",
+            "recon": "Reconnaissance",
+            "spoofing": "Spoofing",
         }
 
         # Look through parent directories for known attack categories

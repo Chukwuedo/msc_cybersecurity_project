@@ -367,3 +367,139 @@ def get_dataset_preview(dataset_path: Path, n_rows: int = 5) -> Optional[pl.Data
     except Exception as e:
         print(f"Error creating preview: {e}")
         return None
+
+
+def analyze_label_distributions(
+    dataset_path: Path, label_column: str = "Label"
+) -> Dict[str, Any]:
+    """Analyze label value distributions in a dataset.
+
+    Args:
+        dataset_path: Path to the dataset parquet file
+        label_column: Name of the label column (defaults to "Label")
+
+    Returns:
+        Dictionary with label statistics and distributions
+    """
+    try:
+        if not dataset_path.exists():
+            return {"error": f"Dataset not found at {dataset_path}"}
+
+        # Use scan_parquet for memory efficiency with large datasets
+        df = pl.scan_parquet(dataset_path)
+
+        # Check if label column exists
+        if label_column not in df.collect_schema().names():
+            # Try common variations
+            variations = ["Label", "label", "class", "Class", "target", "Target"]
+            for var in variations:
+                if var in df.collect_schema().names():
+                    label_column = var
+                    break
+            else:
+                return {"error": f"Label column not found in {dataset_path.name}"}
+
+        # Get unique labels and their counts
+        label_counts = (
+            df.group_by(label_column).agg(pl.count().alias("count")).collect()
+        )
+
+        # Convert to dictionary for easier handling
+        labels_dict = {}
+        for row in label_counts.iter_rows(named=True):
+            labels_dict[str(row[label_column])] = int(row["count"])
+
+        # Sort by count in descending order
+        sorted_labels = sorted(labels_dict.items(), key=lambda x: x[1], reverse=True)
+
+        return {
+            "unique_labels": [item[0] for item in sorted_labels],
+            "label_counts": labels_dict,
+            "total_records": sum(labels_dict.values()),
+            "label_column": label_column,
+        }
+    except Exception as e:
+        return {"error": f"Error analyzing labels: {e}"}
+
+
+def compare_label_distributions(
+    dataset1_path: Path,
+    dataset2_path: Path,
+    label_column1: str = "Label",
+    label_column2: str = "Label",
+) -> Dict[str, Any]:
+    """Compare label distributions between two datasets.
+
+    Args:
+        dataset1_path: Path to first dataset
+        dataset2_path: Path to second dataset
+        label_column1: Label column name in first dataset
+        label_column2: Label column name in second dataset
+
+    Returns:
+        Dictionary with comparison results
+    """
+    results1 = analyze_label_distributions(dataset1_path, label_column1)
+    results2 = analyze_label_distributions(dataset2_path, label_column2)
+
+    # Check for errors
+    if "error" in results1 or "error" in results2:
+        return {
+            "dataset1": results1,
+            "dataset2": results2,
+            "error": "Error in one or both datasets",
+        }
+
+    # Get sets of unique labels
+    labels1 = set(results1["unique_labels"])
+    labels2 = set(results2["unique_labels"])
+
+    # Find common and unique labels
+    common_labels = labels1.intersection(labels2)
+    unique_to_dataset1 = labels1.difference(labels2)
+    unique_to_dataset2 = labels2.difference(labels1)
+
+    # Group similar labels (case insensitive)
+    lower_labels1 = {label.lower(): label for label in labels1}
+    lower_labels2 = {label.lower(): label for label in labels2}
+
+    similar_labels = {}
+    for lower_label in lower_labels1:
+        if (
+            lower_label in lower_labels2
+            and lower_labels1[lower_label] != lower_labels2[lower_label]
+        ):
+            similar_labels[lower_labels1[lower_label]] = lower_labels2[lower_label]
+
+    # Calculate percentages for each dataset
+    percentages1 = {
+        label: (count / results1["total_records"]) * 100
+        for label, count in results1["label_counts"].items()
+    }
+
+    percentages2 = {
+        label: (count / results2["total_records"]) * 100
+        for label, count in results2["label_counts"].items()
+    }
+
+    return {
+        "dataset1": {
+            "name": dataset1_path.name,
+            "unique_labels": sorted(list(labels1)),
+            "label_counts": results1["label_counts"],
+            "label_percentages": percentages1,
+            "total_records": results1["total_records"],
+        },
+        "dataset2": {
+            "name": dataset2_path.name,
+            "unique_labels": sorted(list(labels2)),
+            "label_counts": results2["label_counts"],
+            "label_percentages": percentages2,
+            "total_records": results2["total_records"],
+        },
+        "common_labels": sorted(list(common_labels)),
+        "unique_to_dataset1": sorted(list(unique_to_dataset1)),
+        "unique_to_dataset2": sorted(list(unique_to_dataset2)),
+        "similar_labels": similar_labels,
+        "all_unique_labels": sorted(list(labels1.union(labels2))),
+    }
