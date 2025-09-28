@@ -37,6 +37,7 @@ def _(mo):
 @app.cell
 def _():
     import marimo as mo
+
     return (mo,)
 
 
@@ -61,12 +62,15 @@ def _():
         analyze_dataset_file,
         get_dataset_preview,
     )
+    from src.knowledge_distillation_ensemble.ml.data.harmonize_datasets import (
+        DatasetHarmonizer,
+    )
     from src.knowledge_distillation_ensemble.config.settings import Settings
+
     return (
-        DataConverter,
         DatasetAnalyzer,
         DatasetComparator,
-        DatasetExtractor,
+        DatasetHarmonizer,
         Settings,
         analyze_dataset_file,
         get_dataset_preview,
@@ -80,7 +84,7 @@ def _(Settings):
     print("Project configuration loaded successfully")
     print(f"Data path: {settings.data_path}")
     print(f"Model save path: {settings.model_save_path}")
-    return
+    return (settings,)
 
 
 @app.cell
@@ -90,90 +94,41 @@ def _(mo):
 
 
 @app.cell
-def _(DatasetExtractor):
-    # Initialize extractor and download datasets
-    extractor = DatasetExtractor()
+def _(settings):
+    # Check for existing parquet files
+    print("=== PARQUET DATASET STATUS ===")
 
-    print("=== DOWNLOADING DATASETS ===")
+    # Check for combined parquet files
+    ciciot2023_combined_path = settings.parquet_path / "ciciot2023_combined.parquet"
+    cicdiad2024_combined_path = settings.parquet_path / "cicdiad2024_combined.parquet"
 
-    # Download datasets if needed
-    extractor.download_datasets()
+    # Check for harmonized parquet files
+    ciciot2023_harmonized_path = (
+        settings.processed_parquet_path / "revised_ciciot2023.parquet"
+    )
+    cicdiad2024_harmonized_path = (
+        settings.processed_parquet_path / "revised_cicdiad2024.parquet"
+    )
 
-    # Get CSV file lists
-    ciciot2023_files = extractor.get_ciciot2023_csv_files()
-    cicdiad2024_files = extractor.get_cicdiad2024_csv_files()
-
-    # Report file counts
-    print(f"\nCICIOT 2023 Files ({len(ciciot2023_files)} files):")
-    if ciciot2023_files:
-        for idx, file_path in enumerate(ciciot2023_files[:3], 1):
-            print(f"  {idx}. {file_path.name}")
-        if len(ciciot2023_files) > 3:
-            remaining = len(ciciot2023_files) - 3
-            print(f"  ... and {remaining} more files")
-    else:
-        print("  No files found")
-
-    print(f"\nCIC DIAD 2024 Files ({len(cicdiad2024_files)} files):")
-    if cicdiad2024_files:
-        for idx, file_path in enumerate(cicdiad2024_files[:3], 1):
-            print(f"  {idx}. {file_path.name}")
-        if len(cicdiad2024_files) > 3:
-            remaining = len(cicdiad2024_files) - 3
-            print(f"  ... and {remaining} more files")
-    else:
-        print("  No files found")
-    return cicdiad2024_files, ciciot2023_files
-
-
-@app.cell
-def _(mo):
-    mo.md(r"""#### Data Conversion to Parquet""")
-    return
-
-
-@app.cell
-def _(DataConverter, cicdiad2024_files, ciciot2023_files):
-    # Initialize converter and convert datasets
-    converter = DataConverter()
-
-    print("=== CONVERTING TO PARQUET FORMAT ===")
-
-    # Convert CICIOT 2023
-    ciciot2023_combined_path = None
-    if ciciot2023_files:
-        ciciot2023_combined_path = converter.convert_csv_to_parquet(
-            ciciot2023_files, "ciciot2023_combined"
-        )
-
-    # Convert CIC DIAD 2024
-    cicdiad2024_combined_path = None
-    if cicdiad2024_files:
-        cicdiad2024_combined_path = converter.convert_csv_to_parquet(
-            cicdiad2024_files, "cicdiad2024_combined"
-        )
-
-    # Report conversion status
-    def print_conversion_status(name, source_files, target_path):
-        source_exists = source_files and len(list(source_files)) > 0
-        target_exists = target_path and target_path.exists()
-
-        if source_exists and target_exists:
-            print(f"✓ {name}: Ready")
-        elif source_exists and not target_exists:
-            print(f"⚠ {name}: Source found, needs conversion")
-        elif not source_exists and target_exists:
-            print(f"✓ {name}: Converted (source cleaned)")
+    def print_parquet_status(name, path):
+        if path.exists():
+            print(f"✓ {name}: Available ({path.name})")
         else:
-            print(f"✗ {name}: Not available")
+            print(f"✗ {name}: Not found ({path.name})")
 
-    print_conversion_status(
-        "CICIOT 2023 Combined", ciciot2023_files, ciciot2023_combined_path
+    print("\nCombined Parquet Files:")
+    print_parquet_status("CICIOT 2023 Combined", ciciot2023_combined_path)
+    print_parquet_status("CIC DIAD 2024 Combined", cicdiad2024_combined_path)
+
+    print("\nHarmonized Parquet Files:")
+    print_parquet_status("CICIOT 2023 Harmonized", ciciot2023_harmonized_path)
+    print_parquet_status("CIC DIAD 2024 Harmonized", cicdiad2024_harmonized_path)
+    return (
+        cicdiad2024_combined_path,
+        cicdiad2024_harmonized_path,
+        ciciot2023_combined_path,
+        ciciot2023_harmonized_path,
     )
-    print_conversion_status(
-        "CIC DIAD 2024 Combined", cicdiad2024_files, cicdiad2024_combined_path
-    )
-    return cicdiad2024_combined_path, ciciot2023_combined_path
 
 
 @app.cell
@@ -184,19 +139,27 @@ def _(mo):
 
 @app.cell
 def _(analyze_dataset_file, ciciot2023_combined_path):
-    # Analyze CICIOT 2023 dataset
-    ciciot2023_analyzer = analyze_dataset_file(
-        ciciot2023_combined_path, "CICIOT 2023 Dataset"
-    )
+    # Analyze base CICIOT 2023 dataset
+    if ciciot2023_combined_path and ciciot2023_combined_path.exists():
+        ciciot2023_base_analyzer = analyze_dataset_file(
+            ciciot2023_combined_path, "CICIOT 2023 Base Dataset"
+        )
+    else:
+        ciciot2023_base_analyzer = None
+        print("⚠️ CICIOT 2023 base dataset not available")
     return
 
 
 @app.cell
 def _(analyze_dataset_file, cicdiad2024_combined_path):
-    # Analyze CIC DIAD 2024 dataset
-    cicdiad2024_analyzer = analyze_dataset_file(
-        cicdiad2024_combined_path, "CIC DIAD 2024 Dataset"
-    )
+    # Analyze base CIC DIAD 2024 dataset
+    if cicdiad2024_combined_path and cicdiad2024_combined_path.exists():
+        cicdiad2024_base_analyzer = analyze_dataset_file(
+            cicdiad2024_combined_path, "CIC DIAD 2024 Base Dataset"
+        )
+    else:
+        cicdiad2024_base_analyzer = None
+        print("⚠️ CIC DIAD 2024 base dataset not available")
     return
 
 
@@ -533,18 +496,24 @@ def _(mo):
 
 
 @app.cell
-def _(ciciot2023_combined_path, get_dataset_preview):
-    # Get CICIOT 2023 dataset preview
-    ciciot2023_preview = get_dataset_preview(ciciot2023_combined_path, 100000)
-    ciciot2023_preview
+def _(get_dataset_preview, harmonized_cic23_path):
+    # Get harmonized CICIOT 2023 dataset preview
+    if harmonized_cic23_path and harmonized_cic23_path.exists():
+        ciciot2023_preview = get_dataset_preview(harmonized_cic23_path, 100000)
+        ciciot2023_preview
+    else:
+        print("⚠️ CICIOT 2023 harmonized dataset not available for preview")
     return
 
 
 @app.cell
-def _(cicdiad2024_combined_path, get_dataset_preview):
-    # Get CIC DIAD 2024 dataset preview
-    cicdiad2024_preview = get_dataset_preview(cicdiad2024_combined_path, 100000)
-    cicdiad2024_preview
+def _(get_dataset_preview, harmonized_diad_path):
+    # Get harmonized CIC DIAD 2024 dataset preview
+    if harmonized_diad_path and harmonized_diad_path.exists():
+        cicdiad2024_preview = get_dataset_preview(harmonized_diad_path, 100000)
+        cicdiad2024_preview
+    else:
+        print("⚠️ CIC DIAD 2024 harmonized dataset not available for preview")
     return
 
 
@@ -591,13 +560,134 @@ def _(mo):
 
 
 @app.cell
-def _():
-    # TODO: Implement data preprocessing
-    # - Feature scaling
-    # - Encoding categorical variables
-    # - Train/validation/test splits
-    # - Data augmentation techniques
-    print("Data preprocessing pipeline - To be implemented")
+def _(mo):
+    mo.md(
+        r"""
+    #### Dataset Harmonization Implementation
+
+    Based on the feature mapping analysis above, I have implemented a
+    **DatasetHarmonizer** class in the supporting codebase that does the 
+    following:
+
+    **Key Features:**
+    - **Robust column matching**: Uses normalised names and multiple candidates
+    - **Null-safe operations**: Handles missing values gracefully 
+    - **Binarised flag encoding**: Converts TCP flag counts to 0/1 values
+    - **Composite feature engineering**: Combines forward/backward directions
+    - **Lazy evaluation**: Memory-efficient processing with Polars LazyFrame
+
+    **Output**: 24 harmonized features covering flow timing, packet statistics, 
+    TCP flags, volume metrics, and labels as per the mapping analysis above.
+    """
+    )
+    return
+
+
+@app.cell
+def _(DatasetHarmonizer, settings):
+    # Initialize harmonizer with processed parquet directory
+    harmonizer = DatasetHarmonizer(settings.processed_parquet_path)
+
+    print("✅ DatasetHarmonizer initialized")
+    print(f"📁 Output directory: {harmonizer.output_dir}")
+    print(f"🎯 Target schema: {len(harmonizer.COMMON_FEATURES)} features")
+    print("\nCommon features schema:")
+    for i, feature in enumerate(harmonizer.COMMON_FEATURES, 1):
+        print(f"  {i:2d}. {feature}")
+    return (harmonizer,)
+
+
+@app.cell
+def _(cicdiad2024_harmonized_path, ciciot2023_harmonized_path, harmonizer):
+    # Check for existing harmonized datasets or regenerate if needed
+    print("🔄 Dataset Harmonization Status...")
+
+    if ciciot2023_harmonized_path.exists() and cicdiad2024_harmonized_path.exists():
+        print("✓ Harmonized datasets already exist")
+        harmonized_cic23_path = ciciot2023_harmonized_path
+        harmonized_diad_path = cicdiad2024_harmonized_path
+    else:
+        print("⚠️  Harmonized datasets not found. Regenerating from parquet files...")
+        # Process datasets from existing combined parquet files
+        harmonized_cic23_path, harmonized_diad_path = harmonizer.process_datasets()
+        print("🎉 Dataset harmonization completed successfully!")
+
+    print(f"📂 CICIOT2023 harmonized: {harmonized_cic23_path}")
+    print(f"📂 CIC DIAD 2024 harmonized: {harmonized_diad_path}")
+    return harmonized_cic23_path, harmonized_diad_path
+
+
+@app.cell
+def _(analyze_dataset_file, harmonized_cic23_path):
+    # Analyze harmonized CICIOT 2023 dataset
+    if harmonized_cic23_path and harmonized_cic23_path.exists():
+        ciciot2023_analyzer = analyze_dataset_file(
+            harmonized_cic23_path, "CICIOT 2023 Harmonized Dataset"
+        )
+    else:
+        ciciot2023_analyzer = None
+        print("⚠️ CICIOT 2023 harmonized dataset not available")
+    return
+
+
+@app.cell
+def _(analyze_dataset_file, harmonized_diad_path):
+    # Analyze harmonized CIC DIAD 2024 dataset
+    if harmonized_diad_path and harmonized_diad_path.exists():
+        cicdiad2024_analyzer = analyze_dataset_file(
+            harmonized_diad_path, "CIC DIAD 2024 Harmonized Dataset"
+        )
+    else:
+        cicdiad2024_analyzer = None
+        print("⚠️ CIC DIAD 2024 harmonized dataset not available")
+    return
+
+
+app._unparsable_cell(
+    r"""
+    # Show harmonized CIC DIAD 2024 preview
+    if harmonized_diad_path:
+        print(\"📊 CIC DIAD 2024 Harmonized Dataset Preview:\")
+        diad_harmonized = harmonizer.get_harmonized_preview(harmonized_diad_path, 10)
+        else:
+            mo.md(\"Dataset not available for preview\")
+    else:
+        mo.md(\"CIC DIAD 2024 harmonized dataset not generated\")
+    """,
+    name="_",
+)
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""##### Harmonized Dataset Previews""")
+    return
+
+
+app._unparsable_cell(
+    r"""
+    # Show harmonized CICIOT2023 preview
+    if harmonized_cic23_path:
+        print(\"📊 CICIOT2023 Harmonized Dataset Preview:\")
+        cic23_harmonized = harmonizer.get_harmonized_preview(harmonized_cic23_path, 10)
+        else:
+            mo.md(\"Dataset not available for preview\")
+    else:
+        mo.md(\"CICIOT2023 harmonized dataset not generated\")
+    """,
+    name="_",
+)
+
+
+@app.cell
+def _(cic23_harmonized):
+    cic23_harmonized
+    return
+
+
+@app.cell
+def _(diad_harmonized):
+    diad_harmonized
     return
 
 

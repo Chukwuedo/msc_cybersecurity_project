@@ -47,6 +47,8 @@ class Settings(BaseSettings):
 
     # Data settings
     data_path: Path = PROJECT_ROOT / "data"
+    parquet_path: Path = PROJECT_ROOT / "data" / "parquet"
+    processed_parquet_path: Path = PROJECT_ROOT / "data" / "processed"
     model_save_path: Path = ML_ROOT / "models"
 
     # Logging settings
