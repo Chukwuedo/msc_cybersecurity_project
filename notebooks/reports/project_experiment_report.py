@@ -26,6 +26,7 @@ def _(mo):
     mo.md(
         r"""
     **Data Sources:**
+
     * CICIOT 2023 - Training and Initial test data
     * CIC IOT DI-AD 2024 - Unseen Test data to validate robustness
     """
@@ -36,7 +37,6 @@ def _(mo):
 @app.cell
 def _():
     import marimo as mo
-
     return (mo,)
 
 
@@ -62,7 +62,6 @@ def _():
         get_dataset_preview,
     )
     from src.knowledge_distillation_ensemble.config.settings import Settings
-
     return (
         DataConverter,
         DatasetAnalyzer,
@@ -291,52 +290,239 @@ def _(cicdiad2024_columns, ciciot2023_columns, mo):
 
 
 @app.cell
+def _(mo):
+    mo.md(r"""#### Complete Feature Mapping Table""")
+    return
+
+
+@app.cell
 def _(cicdiad2024_columns, ciciot2023_columns, mo):
-    # Additional analysis for column overlap and differences
+    # Feature mapping analysis based on manual review
 
-    # Find any potential column matches (case-insensitive or similar names)
-    ciciot_lower = {
-        norm_col.lower().replace(" ", "_").replace("-", "_"): norm_col
-        for norm_col in ciciot2023_columns
-    }
-    cicdiad_lower = {
-        norm_col.lower().replace(" ", "_").replace("-", "_"): norm_col
-        for norm_col in cicdiad2024_columns
-    }
-
-    potential_matches = []
-    for normalized, original_ciciot in ciciot_lower.items():
-        if normalized in cicdiad_lower:
-            potential_matches.append((original_ciciot, cicdiad_lower[normalized]))
+    # Define the common feature mapping table
+    feature_mapping_data = [
+        (
+            "flow_duration",
+            "['flow_duration']",
+            "['Flow Duration']",
+            "direct",
+            "Same concept in both datasets: total duration of the flow/window.",
+        ),
+        (
+            "flow_packets_per_second",
+            "['Rate']",
+            "['Flow Packets/s']",
+            "direct",
+            "Packets per second over the whole flow.",
+        ),
+        (
+            "forward_packets_per_second",
+            "['Srate']",
+            "['Fwd Packets/s']",
+            "direct",
+            "Forward-direction packet rate.",
+        ),
+        (
+            "backward_packets_per_second",
+            "['Drate']",
+            "['Bwd Packets/s']",
+            "direct",
+            "Backward-direction packet rate.",
+        ),
+        (
+            "flow_iat_mean",
+            "['IAT']",
+            "['Flow IAT Mean']",
+            "direct",
+            "Mean inter-arrival time across packets in the flow.",
+        ),
+        (
+            "packet_length_min",
+            "['Min']",
+            "['Packet Length Min']",
+            "direct",
+            "Minimum packet length observed in the flow.",
+        ),
+        (
+            "packet_length_max",
+            "['Max']",
+            "['Packet Length Max']",
+            "direct",
+            "Maximum packet length observed in the flow.",
+        ),
+        (
+            "packet_length_mean",
+            "['AVG']",
+            "['Packet Length Mean']",
+            "direct",
+            "Average packet length across the flow.",
+        ),
+        (
+            "packet_length_std",
+            "['Std']",
+            "['Packet Length Std']",
+            "direct",
+            "Standard deviation of packet length across the flow.",
+        ),
+        (
+            "packet_length_range",
+            "['Max - Min']",
+            "['Packet Length Max - Packet Length Min']",
+            "engineered",
+            "Range computed as max - min in both datasets.",
+        ),
+        (
+            "fin_flag_count",
+            "['fin_flag_number', 'fin_count']",
+            "['FIN Flag Count']",
+            "direct",
+            "FIN occurrences across the flow.",
+        ),
+        (
+            "syn_flag_count",
+            "['syn_flag_number', 'syn_count']",
+            "['SYN Flag Count']",
+            "direct",
+            "SYN occurrences across the flow.",
+        ),
+        (
+            "rst_flag_count",
+            "['rst_flag_number', 'rst_count']",
+            "['RST Flag Count']",
+            "direct",
+            "RST occurrences across the flow.",
+        ),
+        (
+            "psh_flag_count",
+            "['psh_flag_number']",
+            "['PSH Flag Count']",
+            "direct",
+            "PSH occurrences across the flow.",
+        ),
+        (
+            "ack_flag_count",
+            "['ack_flag_number', 'ack_count']",
+            "['ACK Flag Count']",
+            "direct",
+            "ACK occurrences across the flow.",
+        ),
+        (
+            "ece_flag_count",
+            "['ece_flag_number']",
+            "['ECE Flag Count']",
+            "direct",
+            "ECE occurrences across the flow.",
+        ),
+        (
+            "cwr_flag_count",
+            "['cwr_flag_number']",
+            "['CWR Flag Count']",
+            "direct",
+            "CWR occurrences across the flow.",
+        ),
+        (
+            "urg_flag_count",
+            "['urg_count']",
+            "['URG Flag Count']",
+            "direct",
+            "URG occurrences across the flow.",
+        ),
+        (
+            "total_packets",
+            "['Number']",
+            "['Total Fwd Packet + Total Bwd packets']",
+            "composite_sum",
+            "Total packets over both directions.",
+        ),
+        (
+            "total_bytes",
+            "['Tot sum']",
+            "['Total Length of Fwd Packet + Total Length of Bwd Packet']",
+            "composite_sum",
+            "Total bytes over both directions.",
+        ),
+        (
+            "average_packet_size",
+            "['Tot size']",
+            "['Average Packet Size']",
+            "direct_or_equivalent",
+            "Mean packet size over the flow.",
+        ),
+        (
+            "flow_bytes_per_second",
+            "['Tot sum / flow_duration']",
+            "['Flow Bytes/s']",
+            "engineered",
+            "Normalised byte rate; compute from total bytes and duration.",
+        ),
+        (
+            "header_length_total",
+            "['Header_Length']",
+            "['Fwd Header Length + Bwd Header Length']",
+            "composite_sum",
+            "Total transport/network header length across directions.",
+        ),
+        (
+            "label",
+            "['label']",
+            "['Label']",
+            "direct",
+            "Target variable. Will harmonise this at a later stage.",
+        ),
+    ]
 
     analysis_md = f"""
-    #### Column Analysis Summary
+    #### Feature Mapping Analysis
 
-    **Dataset Comparison:**
-    - CICIOT 2023: {len(ciciot2023_columns)} columns
-    - CIC DIAD 2024: {len(cicdiad2024_columns)} columns
-    - Exact matches: 0 (as expected - different collection methodologies)
-    - Potential semantic matches: {len(potential_matches)}
+    **Dataset Overview:**
 
-    """
+    - **CICIOT 2023**: {len(ciciot2023_columns)} columns (abbreviated naming)
+    - **CIC DIAD 2024**: {len(cicdiad2024_columns)} columns (descriptive naming)
+    - **Common Features Identified**: {len(feature_mapping_data)} mappable features
 
-    if potential_matches:
-        analysis_md += "**Potential Semantic Matches:**\n\n"
-        for ciciot_col, cicdiad_col in potential_matches:
-            analysis_md += f"- `{ciciot_col}` ↔ `{cicdiad_col}`\n"
+    **Feature Mapping Strategy:**
 
-    analysis_md += """
-    **Key Observations:**
-    - CICIOT 2023 uses shorter, more abbreviated column names
-    - CIC DIAD 2024 uses more descriptive, standardized network flow
-      feature names
-    - Both datasets capture network flow characteristics but with different
-      feature engineering approaches
-    - Feature mapping will be required for cross-dataset analysis and
-      domain adaptation
+    Based on manual analysis, I've identified {len(feature_mapping_data)} common 
+    features that can be mapped between the datasets:
+
+    - **Direct mappings** ({len([f for f in feature_mapping_data if f[3] == "direct"])} features): Identical concepts with different names
+    - **Composite mappings** ({len([f for f in feature_mapping_data if f[3] == "composite_sum"])} features): Features that combine multiple columns 
+    - **Engineered mappings** ({len([f for f in feature_mapping_data if f[3] == "engineered"])} features): Features requiring calculation
+
+    **Key Mapping Categories:**
+
+    1. **Flow Timing Features**: Duration, packet rates, inter-arrival times
+    2. **Packet Size Statistics**: Min, max, mean, std deviation of packet lengths
+    3. **TCP Flag Counts**: All major TCP flags (FIN, SYN, RST, PSH, ACK, ECE, CWR, URG)
+    4. **Flow Aggregates**: Total packets, bytes, and derived rates
+    5. **Header Information**: Combined header lengths across directions
+    6. **Labels**: Target classification variables
+
+    I have performed this mapping this way to enable cross-dataset training and robust model evaluation.
     """
 
     mo.md(analysis_md)
+    return (feature_mapping_data,)
+
+
+@app.cell
+def _(feature_mapping_data):
+    # Create detailed feature mapping table
+    import polars as pl
+
+    # Convert the mapping data to a DataFrame for better display
+    mapping_df = pl.DataFrame(
+        {
+            "Common Feature": [f[0] for f in feature_mapping_data],
+            "CICIOT2023 Features": [f[1] for f in feature_mapping_data],
+            "CICDIAD2024 Features": [f[2] for f in feature_mapping_data],
+            "Mapping Type": [f[3] for f in feature_mapping_data],
+            "Rationale": [f[4] for f in feature_mapping_data],
+        }
+    )
+
+    # Display the mapping table
+    mapping_df
     return
 
 
