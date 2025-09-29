@@ -18,23 +18,30 @@ from matplotlib import ticker as mtick
 # ---- Seaborn setup --------------------------------------------------------
 
 
-try:
-    # Optional: standard label order for consistency
-    from src.knowledge_distillation_ensemble.ml.data.label_harmonizer import (
-        STANDARD_LABELS,
-    )
-except Exception:  # pragma: no cover
-    STANDARD_LABELS = [
-        "Benign",
-        "DDoS",
-        "DoS",
-        "Brute_Force",
-        "Mirai",
-        "Reconnaissance",
-        "Spoofing",
-        "Other",
-        "Unknown",
-    ]
+# Define standard labels locally to avoid optional import issues
+STANDARD_LABELS = [
+    "Benign",
+    "DDoS",
+    "DoS",
+    "Brute_Force",
+    "Mirai",
+    "Reconnaissance",
+    "Spoofing",
+    "Other",
+    "Unknown",
+]
+
+# Multiclass id -> label name mapping used by label_multiclass
+MULTICLASS_ID_TO_LABEL = [
+    "Benign",  # 0
+    "DDoS",  # 1
+    "DoS",  # 2
+    "Brute_Force",  # 3
+    "Mirai",  # 4
+    "Reconnaissance",  # 5
+    "Spoofing",  # 6
+    "Other",  # 7 (catch-all)
+]
 
 
 def seaborn_init() -> None:
@@ -100,6 +107,109 @@ def chart_label_stats(stats: pl.DataFrame, title: str):
                 fontsize=9,
                 color="#22504F",
             )
+
+    plt.show()
+    return fig
+
+
+# ---- Binary / Multiclass encodings ---------------------------------------
+
+
+def compute_label_binary_stats(parquet_path: Path | str) -> pl.DataFrame:
+    """Counts and percent for label_binary (0=Benign, 1=Attack)."""
+    lf = pl.scan_parquet(str(parquet_path)).select("label_binary")
+    counts = lf.group_by("label_binary").count().rename({"count": "n"}).collect()
+    total = counts["n"].sum()
+    return counts.with_columns((pl.col("n") / total * 100).alias("pct")).sort(
+        "label_binary"
+    )
+
+
+def chart_label_binary(stats: pl.DataFrame, title: str):
+    df = stats.to_pandas()
+    df["name"] = df["label_binary"].map({0: "Benign (0)", 1: "Attack (1)"})
+
+    fig, axes = plt.subplots(1, 2, figsize=(10, 3.8), constrained_layout=True)
+
+    sns.barplot(ax=axes[0], data=df, x="name", y="n", color="#6BA292")
+    axes[0].set_title(f"{title} - counts")
+    axes[0].set_xlabel("")
+    axes[0].set_ylabel("count")
+    axes[0].yaxis.set_major_formatter(
+        mtick.FuncFormatter(
+            lambda x, pos: f"{x / 1e6:.1f}M" if x >= 1e6 else f"{x / 1e3:.0f}K"
+        )
+    )
+
+    sns.barplot(ax=axes[1], data=df, x="name", y="pct", color="#E45756")
+    axes[1].set_title(f"{title} - percent")
+    axes[1].set_xlabel("")
+    axes[1].set_ylabel("%")
+    axes[1].set_ylim(0, 100)
+
+    plt.show()
+    return fig
+
+
+def compute_label_multiclass_stats(parquet_path: Path | str) -> pl.DataFrame:
+    """Counts and percent for label_multiclass (0..7)."""
+    lf = pl.scan_parquet(str(parquet_path)).select("label_multiclass")
+    counts = lf.group_by("label_multiclass").count().rename({"count": "n"}).collect()
+    total = counts["n"].sum()
+    out = counts.with_columns((pl.col("n") / total * 100).alias("pct")).sort(
+        "label_multiclass"
+    )
+    # attach names for plotting
+    return out.with_columns(
+        pl.col("label_multiclass")
+        .cast(pl.Int64)
+        .map_elements(
+            lambda i: (
+                MULTICLASS_ID_TO_LABEL[int(i)]
+                if 0 <= int(i) < len(MULTICLASS_ID_TO_LABEL)
+                else "Other"
+            )
+        )
+        .alias("name")
+    )
+
+
+def chart_label_multiclass(stats: pl.DataFrame, title: str):
+    df = stats.to_pandas()
+
+    fig, axes = plt.subplots(1, 2, figsize=(13, 4), constrained_layout=True)
+
+    sns.barplot(
+        ax=axes[0],
+        data=df,
+        x="name",
+        y="n",
+        order=MULTICLASS_ID_TO_LABEL,
+        color="#4C78A8",
+    )
+    axes[0].set_title(f"{title} - counts")
+    axes[0].set_xlabel("class")
+    axes[0].set_ylabel("count")
+    plt.setp(axes[0].get_xticklabels(), rotation=30, ha="right")
+    axes[0].yaxis.set_major_formatter(
+        mtick.FuncFormatter(
+            lambda x, pos: f"{x / 1e6:.1f}M" if x >= 1e6 else f"{x / 1e3:.0f}K"
+        )
+    )
+
+    sns.barplot(
+        ax=axes[1],
+        data=df,
+        x="name",
+        y="pct",
+        order=MULTICLASS_ID_TO_LABEL,
+        color="#72B7B2",
+    )
+    axes[1].set_title(f"{title} - percent")
+    axes[1].set_xlabel("class")
+    axes[1].set_ylabel("%")
+    axes[1].set_ylim(0, 100)
+    plt.setp(axes[1].get_xticklabels(), rotation=30, ha="right")
 
     plt.show()
     return fig
@@ -185,10 +295,8 @@ def _safe_sample(
     parquet_path: Path | str, columns: List[str], n: int = 40_000
 ) -> pl.DataFrame:
     lf = pl.scan_parquet(str(parquet_path)).select(columns)
-    try:
-        return lf.fetch(n)
-    except Exception:
-        return lf.limit(n).collect()
+    # Use limit+collect to avoid exception handling
+    return lf.limit(n).collect()
 
 
 def compute_feature_summary(
@@ -212,19 +320,20 @@ def compute_feature_summary(
 
 
 def chart_feature_summary(summary: pl.DataFrame, title: str):
-    df = summary.to_pandas()
-    df["low"], df["high"] = df["q1"], df["q3"]
+    pdf = summary.to_pandas()
+    pdf["low"], pdf["high"] = pdf["q1"], pdf["q3"]
 
     # Robust x-limits per overall range (avoid long tails dominating)
-    x_min = max(0.0, float(df["low"].min()))
-    x_max = float(df["high"].quantile(0.95)) * 1.1
+    x_min = max(0.0, float(pdf["low"].min()))
+    x_max = float(pdf["high"].quantile(0.95)) * 1.1
 
-    fig, ax = plt.subplots(
-        figsize=(10, max(3, 0.6 * df["feature"].nunique())),
+    # Create axes only (discard the fig variable to avoid linter warning)
+    ax = plt.subplots(
+        figsize=(10, max(3, 0.6 * pdf["feature"].nunique())),
         constrained_layout=True,
-    )
+    )[1]
 
-    for ds, sub in df.groupby("dataset"):
+    for ds, sub in pdf.groupby("dataset"):
         ax.hlines(
             y=sub["feature"],
             xmin=sub["low"],

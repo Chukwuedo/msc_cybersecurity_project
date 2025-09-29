@@ -743,14 +743,23 @@ def _():
         compute_ks_table,
         chart_ks_table,
         show_feature_summary_for_datasets,
+        # Newly added utilities for encoded labels
+        compute_label_binary_stats,
+        chart_label_binary,
+        compute_label_multiclass_stats,
+        chart_label_multiclass,
     )
 
     seaborn_init()
     return (
         chart_ks_table,
+        chart_label_binary,
+        chart_label_multiclass,
         chart_label_stats,
         chart_mapping_heatmap,
         compute_ks_table,
+        compute_label_binary_stats,
+        compute_label_multiclass_stats,
         compute_label_stats,
         compute_mapping_percent,
         show_feature_summary_for_datasets,
@@ -777,6 +786,53 @@ def _(
         chart_label_stats(stats24, "CICDIAD2024 (harmonized)")
     else:
         print("CICDIAD2024: harmonized parquet not available")
+    return
+
+
+@app.cell
+def _(
+    Path,
+    chart_label_binary,
+    compute_label_binary_stats,
+    harmonized_cic23_path,
+    harmonized_diad_path,
+):
+    # Encoded label distributions placed directly under harmonized charts
+    # 1) label_binary (0=Benign, 1=Attack)
+    if harmonized_cic23_path and Path(harmonized_cic23_path).exists():
+        bin23 = compute_label_binary_stats(str(harmonized_cic23_path))
+        chart_label_binary(bin23, "CICIOT2023 label_binary")
+    else:
+        print("CICIOT2023: missing for label_binary")
+
+    if harmonized_diad_path and Path(harmonized_diad_path).exists():
+        bin24 = compute_label_binary_stats(str(harmonized_diad_path))
+        chart_label_binary(bin24, "CICDIAD2024 label_binary")
+    else:
+        print("CICDIAD2024: missing for label_binary")
+    return
+
+
+@app.cell
+def _(
+    Path,
+    chart_label_multiclass,
+    compute_label_multiclass_stats,
+    harmonized_cic23_path,
+    harmonized_diad_path,
+):
+    # 2) label_multiclass (0..7)
+    if harmonized_cic23_path and Path(harmonized_cic23_path).exists():
+        mc23 = compute_label_multiclass_stats(str(harmonized_cic23_path))
+        chart_label_multiclass(mc23, "CICIOT2023 label_multiclass")
+    else:
+        print("CICIOT2023: missing for label_multiclass")
+
+    if harmonized_diad_path and Path(harmonized_diad_path).exists():
+        mc24 = compute_label_multiclass_stats(str(harmonized_diad_path))
+        chart_label_multiclass(mc24, "CICDIAD2024 label_multiclass")
+    else:
+        print("CICDIAD2024: missing for label_multiclass")
     return
 
 
