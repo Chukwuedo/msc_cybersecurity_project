@@ -42,6 +42,7 @@ def _(mo):
 @app.cell
 def _():
     import marimo as mo
+
     return (mo,)
 
 
@@ -67,6 +68,7 @@ def _():
         get_dataset_preview,
     )
     from src.knowledge_distillation_ensemble.config.settings import Settings
+
     return (
         DatasetAnalyzer,
         DatasetComparator,
@@ -1139,6 +1141,40 @@ def _(analysis_diad_preview):
 @app.cell
 def _(mo):
     mo.md(r"""### Analysis Data Train-Test Split""")
+    return
+
+
+@app.cell
+def _():
+    from src.knowledge_distillation_ensemble.ml.data.train_test_split import (
+        get_stratified_split_lazy,
+        compute_split_distributions,
+    )
+
+    return get_stratified_split_lazy, compute_split_distributions
+
+
+@app.cell
+def _(get_stratified_split_lazy):
+    # Create stratified 90/10 split for CICIOT2023 analysis dataset
+    split = get_stratified_split_lazy(
+        dataset_name="ciciot2023",
+        label_col="label_multiclass",
+        train_ratio=0.9,
+        seed=42,
+    )
+    print("Stratified split created (lazy): train/test are LazyFrames")
+    return (split,)
+
+
+@app.cell
+def _(compute_split_distributions, split):
+    # Validate stratification proportions (materialize small summaries only)
+    train_stats, test_stats = compute_split_distributions(
+        split, label_col="label_multiclass"
+    )
+    print("Train distribution (counts, %):\n", train_stats)
+    print("Test distribution (counts, %):\n", test_stats)
     return
 
 
