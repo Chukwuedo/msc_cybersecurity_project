@@ -240,7 +240,7 @@ def chart_feature_summary(summary: pl.DataFrame, title: str):
     ax.set_xlim(x_min, x_max)
     ax.legend(loc="best", ncol=2)
     plt.show()
-    return fig
+    return None
 
 
 def compute_ks(
@@ -320,77 +320,6 @@ def chart_ks_table(df: pl.DataFrame, title: str):
 # ---- Median delta (%) across datasets -------------------------------------
 
 
-def compute_median_delta(
-    path_a: Path | str,
-    path_b: Path | str,
-    features: Iterable[str],
-    name_a: str = "CICIOT2023",
-    name_b: str = "CICDIAD2024",
-) -> pl.DataFrame:
-    """Compute per-feature medians on both datasets and the delta (%).
-    Δ% is computed as ((median_b - median_a) / max(|median_a|, 1e-12)) * 100.
-    """
-    fa = list(features)
-    fb = list(features)
-    da = _safe_sample(path_a, fa, 80_000)
-    db = _safe_sample(path_b, fb, 80_000)
-
-    rows = []
-    for f in features:
-        ma = float(da.select(pl.col(f).median()).item())
-        mb = float(db.select(pl.col(f).median()).item())
-        denom = max(abs(ma), 1e-12)
-        delta_pct = ((mb - ma) / denom) * 100.0
-        rows.append((f, ma, mb, delta_pct))
-
-    return pl.DataFrame(
-        rows,
-        schema=[
-            "feature",
-            f"{name_a}_median",
-            f"{name_b}_median",
-            "delta_pct",
-        ],
-    ).sort("delta_pct", descending=True)
-
-
-def chart_median_delta(df: pl.DataFrame, title: str):
-    pdf = df.sort("delta_pct", descending=True).to_pandas()
-    width = max(10, 0.45 * len(pdf["feature"]))
-    fig, ax = plt.subplots(figsize=(width, 4), constrained_layout=True)
-    sns.barplot(ax=ax, data=pdf, x="feature", y="delta_pct", color="#E45756")
-    ax.set_title(title)
-    ax.set_xlabel("feature")
-    ax.set_ylabel("Δ median % (2024 vs 2023)")
-    plt.setp(ax.get_xticklabels(), rotation=45, ha="right", fontsize=8)
-    # annotate
-    for i, v in enumerate(pdf["delta_pct"].tolist()):
-        offset = 0.02 * (1 if v >= 0 else -1)
-        ax.text(
-            i,
-            v + offset,
-            f"{v:.1f}%",
-            ha="center",
-            va="bottom",
-            fontsize=8,
-        )
-    plt.show()
-    return fig
-
-
-def median_delta_table(df: pl.DataFrame, top: int = 10) -> pl.DataFrame:
-    """Return a compact table of top-|Δ%| features with both medians."""
-    return (
-        df.with_columns(pl.col("delta_pct").abs().alias("abs_delta"))
-        .sort("abs_delta", descending=True)
-        .drop("abs_delta")
-        .head(top)
-    )
-
-
-# ---- Notebook-friendly wrappers ------------------------------------------
-
-
 def show_feature_summary_for_datasets(
     path_a: Path | str | None,
     path_b: Path | str | None,
@@ -425,24 +354,5 @@ def show_feature_summary_for_datasets(
         summary_df = summaries[0]
     else:
         summary_df = pl.concat(summaries, how="vertical_relaxed")
-    return chart_feature_summary(summary_df, title)
-
-
-def show_ks_between_datasets(
-    path_a: Path | str | None,
-    path_b: Path | str | None,
-    features: Iterable[str],
-    title: str = "Cross-dataset shift (KS distance)",
-):
-    """Compute and render KS shift between two datasets (compact)."""
-    if not path_a or not path_b:
-        print("Need both harmonized datasets for KS comparison.")
-        return None
-
-    pa, pb = Path(path_a), Path(path_b)
-    if not (pa.exists() and pb.exists()):
-        print("Need both harmonized datasets for KS comparison.")
-        return None
-
-    ks_df = compute_ks_table(str(pa), str(pb), list(features))
-    return chart_ks_table(ks_df, title)
+    chart_feature_summary(summary_df, title)
+    return None

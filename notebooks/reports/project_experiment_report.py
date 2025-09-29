@@ -527,21 +527,24 @@ def _(mo):
     # Summary of key findings from exploratory data analysis
 
     eda_summary = """
-    #### Key EDA Findings
+    #### Key EDA Findings I observed
 
     **CICIOT 2023 Dataset Characteristics:**
+
     - Primarily numeric features (Float64 types)
     - Minimal categorical data
-    - Focus on IoT network behavior patterns
+    - Focus on IoT network behaviour patterns
     - Features appear to be engineered/aggregated metrics
 
     **CIC DIAD 2024 Dataset Characteristics:**
+
     - Mix of numeric (Float64/Int64) and categorical (String) features
     - More detailed flow-level information
     - Includes metadata like IP addresses, timestamps, protocols
     - Raw network flow features with computed statistics
 
     **Data Quality Observations:**
+
     - Both datasets have 0% missing values (excellent completeness)
     - Large scale datasets (46M+ and 19M+ rows respectively)
     - Different feature engineering approaches require careful mapping
@@ -728,7 +731,7 @@ def _(mo):
 
 @app.cell
 def _():
-    # Lightweight helpers (seaborn/matplotlib based)
+    # Lightweight helpers
     from src.knowledge_distillation_ensemble.ml.evaluation.visualizations import (
         seaborn_init,
         compute_label_stats,
@@ -740,40 +743,29 @@ def _():
         compute_ks_table,
         chart_ks_table,
         show_feature_summary_for_datasets,
-        show_ks_between_datasets,
-        compute_median_delta,
-        chart_median_delta,
-        median_delta_table,
     )
 
     seaborn_init()
     return (
-        seaborn_init,
-        chart_feature_summary,
         chart_ks_table,
         chart_label_stats,
         chart_mapping_heatmap,
-        compute_feature_summary,
         compute_ks_table,
         compute_label_stats,
         compute_mapping_percent,
         show_feature_summary_for_datasets,
-        show_ks_between_datasets,
-        compute_median_delta,
-        chart_median_delta,
-        median_delta_table,
     )
 
 
 @app.cell
 def _(
     Path,
-    compute_label_stats,
     chart_label_stats,
+    compute_label_stats,
     harmonized_cic23_path,
     harmonized_diad_path,
 ):
-    # Class imbalance (seaborn figures are shown inline when created)
+    # Class imbalance
     if harmonized_cic23_path and Path(harmonized_cic23_path).exists():
         stats23 = compute_label_stats(str(harmonized_cic23_path))
         chart_label_stats(stats23, "CICIOT2023 (harmonized)")
@@ -809,12 +801,7 @@ def _(
 
 
 @app.cell
-def _(
-    Path,
-    compute_ks_table,
-    harmonized_cic23_path,
-    harmonized_diad_path,
-):
+def _(Path, compute_ks_table, harmonized_cic23_path, harmonized_diad_path):
     # Derive top-8 features by KS for focused medians/IQR
     if (
         harmonized_cic23_path
@@ -865,9 +852,9 @@ def _(
 @app.cell
 def _(
     Path,
-    show_feature_summary_for_datasets,
     harmonized_cic23_path,
     harmonized_diad_path,
+    show_feature_summary_for_datasets,
     top_features,
 ):
     # Focused medians/IQR on top-8 KS features
@@ -930,6 +917,64 @@ def _(
         chart_ks_table(ks_df, "KS distance: CICIOT2023 vs CICDIAD2024")
     else:
         print("Need both harmonized datasets for KS comparison.")
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(
+        r"""
+    ### Data Processing Summary and Key Insights
+
+    This data processing section synthesizes the outcomes of data harmonization, summary statistics, and the visual analyses efforts to set up the machine learning plan for the teacher and student model knowledge distillation ensemble approach.
+
+    #### 1) Harmonization and data integrity
+    - Feature schema: I have implemented 23 standardized flow features in both datasets to ensure consistency when testing the performance of the machine learning analysis approach to the new dataset CIC DIAD2024 to test for robustness.
+    - Labels:
+        - `label` contains harmonized semantic classes; `original_label` preserves raw labels for traceability.
+    - Outcome: With the preparation process, I have achieved a consistent cross-dataset schema with lineage to originals — suitable for cross-domain ML and error analysis.
+
+    #### 2) Class imbalance (counts and percent)
+    - I have observed that CICIOT2023 and CICDIAD2024 are both heavily imbalanced as DoS/DDoS dominate.
+    - Minority classes (e.g., Brute_Force, Spoofing, Reconnaissance) represent a tiny fraction of samples.
+    - Implications:
+      - I will be using stratified splits and macro-averaged metrics (macro-F1, macro-PR AUC).
+      - I will apply class weights or rebalancing strategies; consider calibrated decision thresholds.
+      - I will prefer cost-sensitive training; monitor minority recall explicitly.
+
+    #### 3) Original → Harmonized mapping (CICIOT2023 and CICDIAD2024)
+    - The row-normalized heatmap shows diagonal dominance where I have mapped original attack types cleanly to harmonized classes.
+    - I have also implemented a semantically coherent reclassification for labels across both datasets (e.g., DNS_Spoofing/MITM-ArpSpoofing → Spoofing; VulnerabilityScan → Reconnaissance).
+    - Implications:
+      - Minimal label leakage/ambiguity across datasets.
+      - Downstream evaluation will reflect true performance of machine learning security approach across class semantics rather than dataset-specific taxonomy.
+
+    #### 4) Cross-dataset shift — KS distance (CICIOT2023 vs CICDIAD2024)
+    - KS distance highlights which features change most across datasets (unitless, 0–1 scale):
+      - Highest shift features include packet/flow timing and TCP-flag-related counts.
+      - Lower shift features include flow-bytes-per-second and some size aggregates.
+    - Implications:
+      - I will apply robust scaling per feature (e.g., quantile/robust scaler) before model training.
+
+    #### 5) Feature medians and IQR (top-8 by KS)
+    - Per-dataset medians and dispersion reveal which distributions moved and by how much:
+      - Flow timing (e.g., `flow_duration`, `flow_iat_mean`) shows large median and IQR changes.
+      - Several TCP flag counts shift in location but retain compact dispersion in one dataset.
+    - Implications:
+      - This means I need to be intentional about my normalization choice; and will consider log/robust transforms where heavy-tailed.
+
+    #### 6) Next steps for the Machine Learning Modelling
+    - Data pipeline:
+      - I will perform robust scaling (per-feature) + optional log transforms for skewed features.
+      - I will perform stratified cross-validation (CV); and focus on using macro-F1 and PR-AUC as primary evaluation metrics.
+      - I will train on CICIOT2023, validate on held-out CICIOT2023, and test on CICDIAD2024 to measure robustness.
+    - Modeling:
+      - I will begin with setting up the thorougly calibrated and knowledgeable teacher model
+      - I will proceed with setting up the ensemble student model
+      - I will implement the knowledge distillation process to transfer knowledge from the teacher to the student model.
+      - I will evaluate the teacher model, the trained student model, a non-trained student model, and a baseline model on the CICDIAD2024 to assess performance and robustness.
+    """
+    )
     return
 
 
@@ -1020,7 +1065,7 @@ def _():
     # print(f"CICDIAD2024 in/out: {diad_in} -> {diad_out}")
     # return fh, cic23_in, diad_in, cic23_out, diad_out
 
-    print("Regeneration helper disabled. Uncomment lines in this cell to use.")
+    print("Helper code for me to comment when I need it")
     return
 
 
