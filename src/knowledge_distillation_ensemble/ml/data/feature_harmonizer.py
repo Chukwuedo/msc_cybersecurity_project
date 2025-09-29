@@ -13,12 +13,18 @@ from .label_harmonizer import LabelHarmonizer
 
 
 class FeatureHarmonizer:
-    """Builds the harmonized 23-feature schema + labels for supported datasets."""
+    """Builds the harmonized 23-feature schema + labels for supported
+    datasets.
+    """
 
     def __init__(self) -> None:
         self.labeler = LabelHarmonizer()
 
-    def _exprs_ciciot2023(self, lf: pl.LazyFrame, label_column: str) -> list[pl.Expr]:
+    def _exprs_ciciot2023(
+        self,
+        lf: pl.LazyFrame,
+        label_column: str,
+    ) -> list[pl.Expr]:
         def _coalesce(*cols: str) -> pl.Expr:
             return pl.coalesce(
                 [pl.col(c) for c in cols if c in lf.columns] + [pl.lit(0)]
@@ -53,7 +59,11 @@ class FeatureHarmonizer:
             pl.col(label_column).alias("_raw_label"),
         ]
 
-    def _exprs_cicdiad2024(self, lf: pl.LazyFrame, label_column: str) -> list[pl.Expr]:
+    def _exprs_cicdiad2024(
+        self,
+        _lf: pl.LazyFrame,
+        label_column: str,
+    ) -> list[pl.Expr]:
         return [
             pl.col("Flow Duration").alias("flow_duration"),
             pl.col("Flow Packets/s").alias("flow_packets_per_second"),
@@ -130,6 +140,33 @@ class FeatureHarmonizer:
             .map_elements(_map_label, return_dtype=pl.String)
             .alias("label"),
         ).drop("_raw_label")
+        # Add requested label encodings
+        final = final.with_columns(
+            # Binary: 0 for Benign, 1 otherwise
+            (pl.when(pl.col("label") == pl.lit("Benign")).then(0).otherwise(1))
+            .cast(pl.Int8)
+            .alias("label_binary"),
+            # Multiclass mapping per specification; unknowns map to 7 (Other)
+            (
+                pl.when(pl.col("label") == pl.lit("Benign"))
+                .then(0)
+                .when(pl.col("label") == pl.lit("DDoS"))
+                .then(1)
+                .when(pl.col("label") == pl.lit("DoS"))
+                .then(2)
+                .when(pl.col("label") == pl.lit("Brute_Force"))
+                .then(3)
+                .when(pl.col("label") == pl.lit("Mirai"))
+                .then(4)
+                .when(pl.col("label") == pl.lit("Reconnaissance"))
+                .then(5)
+                .when(pl.col("label") == pl.lit("Spoofing"))
+                .then(6)
+                .otherwise(7)
+            )
+            .cast(pl.Int8)
+            .alias("label_multiclass"),
+        )
 
         # Write out lazily
         final.sink_parquet(str(out_path))
@@ -141,4 +178,9 @@ class FeatureHarmonizer:
         output_path: Path | str,
         label_column: str = "label",
     ) -> None:
-        self.harmonize_dataset(input_path, output_path, "ciciot2023", label_column)
+        self.harmonize_dataset(
+            input_path,
+            output_path,
+            "ciciot2023",
+            label_column,
+        )
