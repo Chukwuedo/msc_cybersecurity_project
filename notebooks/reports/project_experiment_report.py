@@ -11,13 +11,13 @@ app = marimo.App(
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""## Project Experiment Report""")
+    mo.md(r"""# Project Experiment Report""")
     return
 
 
 @app.cell
 def _(mo):
-    mo.md(r"""### Data Sourcing and Analysis""")
+    mo.md(r"""## Data Sourcing and Analysis""")
     return
 
 
@@ -86,7 +86,7 @@ def _(Settings):
 
 @app.cell
 def _(mo):
-    mo.md(r"""#### Dataset Download and Extraction""")
+    mo.md(r"""### Dataset Download and Extraction""")
     return
 
 
@@ -130,7 +130,7 @@ def _(settings):
 
 @app.cell
 def _(mo):
-    mo.md(r"""#### Dataset Statistics and Analysis""")
+    mo.md(r"""### Dataset Statistics and Analysis""")
     return
 
 
@@ -162,7 +162,7 @@ def _(analyze_dataset_file, cicdiad2024_combined_path):
 
 @app.cell
 def _(mo):
-    mo.md(r"""#### Dataset Comparison""")
+    mo.md(r"""### Dataset Comparison""")
     return
 
 
@@ -192,7 +192,7 @@ def _(DatasetComparator, cicdiad2024_combined_path, ciciot2023_combined_path):
 
 @app.cell
 def _(mo):
-    mo.md(r"""#### Complete Column Inventory""")
+    mo.md(r"""### Complete Column Inventory""")
     return
 
 
@@ -251,7 +251,7 @@ def _(cicdiad2024_columns, ciciot2023_columns, mo):
 
 @app.cell
 def _(mo):
-    mo.md(r"""#### Complete Feature Mapping Table""")
+    mo.md(r"""### Complete Feature Mapping Table""")
     return
 
 
@@ -432,7 +432,7 @@ def _(cicdiad2024_columns, ciciot2023_columns, mo):
     ]
 
     analysis_md = f"""
-    #### Feature Mapping Analysis
+    ### Feature Mapping Analysis
 
     **Dataset Overview:**
 
@@ -486,7 +486,7 @@ def _():
 
 @app.cell
 def _(mo):
-    mo.md(r"""#### Exploratory Data Analysis""")
+    mo.md(r"""### Exploratory Data Analysis""")
     return
 
 
@@ -557,13 +557,7 @@ def _(mo):
 
 @app.cell
 def _(mo):
-    mo.md(r"""### Machine Learning Pipeline""")
-    return
-
-
-@app.cell
-def _(mo):
-    mo.md(r"""#### Data Preprocessing""")
+    mo.md(r"""### Data Preprocessing""")
     return
 
 
@@ -577,6 +571,7 @@ def _(mo):
     completed with the following approach:
 
     **Key Features:**
+
     - **Robust column matching**: Uses normalised names and multiple candidates
     - **Null-safe operations**: Handles missing values gracefully 
     - **Binarised flag encoding**: Converts TCP flag counts to 0/1 values
@@ -674,7 +669,7 @@ def _(analyze_dataset_file, harmonized_diad_path):
 
 @app.cell
 def _(mo):
-    mo.md(r"""##### Harmonized Dataset Previews""")
+    mo.md(r"""#### Harmonized Dataset Previews""")
     return
 
 
@@ -718,7 +713,7 @@ def _(diad_harmonized):
 def _(mo):
     mo.md(
         r"""
-    #### Aggregate Visualizations
+    ### Aggregate Visualizations
 
     We visualize small, meaningful summaries:
     - Class imbalance (counts and percent) per dataset
@@ -980,7 +975,7 @@ def _(
 def _(mo):
     mo.md(
         r"""
-    ### Data Processing Summary and Key Insights
+    ### Data Processing Summary and Key Insights of the Harmonized Datasets
 
     This data processing section synthesizes the outcomes of data harmonization, summary statistics, and the visual analyses efforts to set up the machine learning plan for the teacher and student model knowledge distillation ensemble approach.
 
@@ -1036,7 +1031,66 @@ def _(mo):
 
 @app.cell
 def _(mo):
-    mo.md(r"""#### Teacher Model Training""")
+    mo.md(r"""## Machine Learning Pipeline""")
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""### Machine-Learning-Ready Datasets""")
+    return
+
+
+@app.cell
+def _():
+    from src.knowledge_distillation_ensemble.ml.data.analysis_builder import (
+        create_analysis_parquet,
+    )
+
+    analysis_cic23_path = create_analysis_parquet("ciciot2023", seed=42)
+    analysis_diad_path = create_analysis_parquet("cicdiad2024", seed=42)
+
+    print("Analysis datasets ready:")
+    print(f"  • CICIOT2023: {analysis_cic23_path}")
+    print(f"  • CICDIAD2024: {analysis_diad_path}")
+    return analysis_cic23_path, analysis_diad_path
+
+
+@app.cell
+def _(
+    Path,
+    analysis_cic23_path,
+    analysis_diad_path,
+    compute_label_stats,
+    chart_label_stats,
+    compute_label_binary_stats,
+    chart_label_binary,
+    compute_label_multiclass_stats,
+    chart_label_multiclass,
+):
+    # Label distributions on analysis_* datasets
+    def _maybe_chart(path: Path, title_prefix: str):
+        if path and Path(path).exists():
+            # Text labels
+            stats = compute_label_stats(str(path))
+            chart_label_stats(stats, f"{title_prefix} (analysis)")
+            # Binary
+            bstats = compute_label_binary_stats(str(path))
+            chart_label_binary(bstats, f"{title_prefix} label_binary")
+            # Multiclass
+            mstats = compute_label_multiclass_stats(str(path))
+            chart_label_multiclass(mstats, f"{title_prefix} label_multiclass")
+        else:
+            print(f"Missing analysis dataset: {path}")
+
+    _maybe_chart(analysis_cic23_path, "CICIOT2023")
+    _maybe_chart(analysis_diad_path, "CICDIAD2024")
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""### Teacher Model Training""")
     return
 
 
