@@ -7,7 +7,9 @@ requires-python = ">=3.12"
 dependencies = [
     "duckdb>=1.4.0",
     "kagglehub>=0.3.13",
+    "lightgbm>=4.6.0",
     "marimo>=0.16.2",
+    "pandas>=2.3.2",
     "polars>=1.33.1",
     "pyarrow>=21.0.0",
     "pydantic>=2.0.0",
@@ -15,6 +17,7 @@ dependencies = [
     "pytorch-lightning>=2.5.5",
     "scikit-learn>=1.7.2",
     "sqlglot>=27.19.0",
+    "torch>=2.8.0",
 ]
 
 [dependency-groups]

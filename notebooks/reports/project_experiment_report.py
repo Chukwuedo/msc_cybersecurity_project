@@ -1215,6 +1215,526 @@ def _(mo):
 
 
 @app.cell
+def _():
+    mo.md("""
+    # Network Intrusion – Teacher/Student Experiments
+    *Polars + scikit-learn 1.4+ + PyTorch Lightning + LightGBM Ensemble*
+
+    **What you'll do**
+    1. Load pre-split data (train/test Parquet) + optional **unseen** dataset.
+    2. Inspect features and class balance.
+    3. Choose preprocessing (Robust vs Standard scaler).
+    4. Train **Teacher** (4-layer Lightning MLP) and **calibrate** via temperature scaling.
+    5. Distil to a **LightGBM ensemble** (soft voting) using teacher **logits** or **calibrated probabilities**.
+    6. Compare to a **Decision Tree** baseline on test and unseen sets.
+    7. Save artefacts as needed.
+    """)
+    return
+
+
+# ---------- Imports & config ----------
+@app.cell
+def _():
+    from pathlib import Path
+    from typing import List
+
+    import numpy as np
+    import polars as pl
+
+    from sklearn import set_config
+    from sklearn.compose import ColumnTransformer
+    from sklearn.pipeline import Pipeline
+    from sklearn.impute import SimpleImputer
+    from sklearn.preprocessing import StandardScaler, RobustScaler
+    from sklearn.metrics import (
+        accuracy_score,
+        f1_score,
+        precision_score,
+        recall_score,
+        classification_report,
+        roc_auc_score,
+        confusion_matrix,
+    )
+
+    import matplotlib.pyplot as plt
+
+    from teacher_model import (
+        train_teacher,
+        predict_logits,
+        calibrate_temperature,
+        logits_to_calibrated_probs,
+    )
+    from student_model import StudentEnsemble
+    from benchmark_model import train_decision_tree
+
+    set_config(transform_output="polars")  # scikit-learn ≥ 1.4
+
+    FEATURES: List[str] = [
+        "flow_bytes_per_second",
+        "flow_packets_per_second",
+        "packet_length_mean",
+        "flow_duration",
+        "average_packet_size",
+        "total_packets",
+        "total_bytes",
+        "header_length_total",
+        "fin_flag_count",
+        "syn_flag_count",
+        "rst_flag_count",
+        "psh_flag_count",
+        "ack_flag_count",
+        "ece_flag_count",
+        "cwr_flag_count",
+        "urg_flag_count",
+        "packet_length_min",
+        "packet_length_max",
+        "packet_length_std",
+        "packet_length_range",
+        "forward_packets_per_second",
+        "backward_packets_per_second",
+        "flow_iat_mean",
+    ]
+
+    TARGETS = {
+        "binary": "label_binary",
+        "multiclass": "label_multiclass",
+    }
+
+    # UI controls
+    data_train = mo.ui.text(
+        value="network_intrusion_train.parquet", label="Train Parquet path"
+    )
+    data_test = mo.ui.text(
+        value="network_intrusion_test.parquet", label="Test Parquet path"
+    )
+    data_unseen = mo.ui.text(value="", label="Unseen Parquet path (optional)")
+
+    task = mo.ui.dropdown(
+        options=[("Binary", "binary"), ("Multiclass", "multiclass")],
+        value="binary",
+        label="Task",
+    )
+    scaler = mo.ui.dropdown(
+        options=[("RobustScaler (default)", "robust"), ("StandardScaler", "standard")],
+        value="robust",
+        label="Scaler",
+    )
+
+    epochs = mo.ui.slider(5, 50, value=15, label="Teacher epochs")
+    batch = mo.ui.slider(512, 8192, value=2048, step=512, label="Teacher batch size")
+
+    calibrate = mo.ui.switch(
+        value=True, label="Calibrate teacher with temperature scaling"
+    )
+    distil_with = mo.ui.dropdown(
+        options=[("Use calibrated probabilities", "probs"), ("Use logits", "logits")],
+        value="probs",
+        label="Distillation signal",
+    )
+
+    n_members = mo.ui.slider(
+        1, 11, value=5, step=1, label="Student ensemble members (LightGBM)"
+    )
+    save_artifacts = mo.ui.switch(value=False, label="Save models to ./models/")
+
+    mo.vstack(
+        [
+            mo.hstack([data_train, data_test, data_unseen]),
+            mo.hstack([task, scaler, distil_with]),
+            mo.hstack([epochs, batch, n_members, calibrate]),
+            save_artifacts,
+        ]
+    )
+
+    return (
+        Path,
+        np,
+        pl,
+        ColumnTransformer,
+        Pipeline,
+        SimpleImputer,
+        StandardScaler,
+        RobustScaler,
+        accuracy_score,
+        f1_score,
+        precision_score,
+        recall_score,
+        classification_report,
+        roc_auc_score,
+        confusion_matrix,
+        plt,
+        train_teacher,
+        predict_logits,
+        calibrate_temperature,
+        logits_to_calibrated_probs,
+        StudentEnsemble,
+        train_decision_tree,
+        FEATURES,
+        TARGETS,
+        data_train,
+        data_test,
+        data_unseen,
+        task,
+        scaler,
+        epochs,
+        batch,
+        calibrate,
+        distil_with,
+        n_members,
+        save_artifacts,
+    )
+
+
+# ---------- Helpers ----------
+@app.cell
+def _():
+    import numpy as np
+    import polars as pl
+    from sklearn.compose import ColumnTransformer
+    from sklearn.pipeline import Pipeline
+    from sklearn.impute import SimpleImputer
+    from sklearn.preprocessing import StandardScaler, RobustScaler
+
+    def build_preprocessor(features, robust: bool = True) -> ColumnTransformer:
+        num_steps = [
+            ("imputer", SimpleImputer(strategy="median")),
+            (
+                "scaler",
+                RobustScaler(unit_variance=True) if robust else StandardScaler(),
+            ),
+        ]
+        return ColumnTransformer(
+            [
+                ("num", Pipeline(num_steps), features),
+            ],
+            remainder="drop",
+            n_jobs=-1,
+        )
+
+    def to_numpy_after_fit_transform(
+        preproc: ColumnTransformer, X_train_pl: pl.DataFrame, X_test_pl: pl.DataFrame
+    ):
+        X_train_proc_pl = preproc.fit_transform(X_train_pl)
+        X_test_proc_pl = preproc.transform(X_test_pl)
+        return X_train_proc_pl.to_numpy(), X_test_proc_pl.to_numpy()
+
+    return build_preprocessor, to_numpy_after_fit_transform
+
+
+# ---------- Load & peek ----------
+@app.cell
+def _(Path, pl, FEATURES, TARGETS, data_train, data_test, task):
+    train_path = Path(data_train.value)
+    test_path = Path(data_test.value)
+    target_col = TARGETS[task.value]
+
+    train = pl.read_parquet(train_path)
+    test = pl.read_parquet(test_path)
+
+    X_train_pl = train.select(FEATURES)
+    y_train_pl = train.select(target_col).to_series()
+    X_test_pl = test.select(FEATURES)
+    y_test_pl = test.select(target_col).to_series()
+
+    mo.md(
+        f"**Training rows:** {X_train_pl.height:,} · **Testing rows:** {X_test_pl.height:,} · **Features:** {len(FEATURES)} · **Target:** `{target_col}`"
+    )
+    mo.md("### Sample rows (train)")
+    mo.as_html(X_train_pl.head(5).to_pandas().to_html(index=False))
+
+    return X_train_pl, X_test_pl, y_train_pl, y_test_pl, target_col
+
+
+# ---------- Class balance ----------
+@app.cell
+def _(np, y_train_pl, y_test_pl, task):
+    import numpy as _np
+
+    labels_train, counts_train = _np.unique(y_train_pl.to_numpy(), return_counts=True)
+    labels_test, counts_test = _np.unique(y_test_pl.to_numpy(), return_counts=True)
+    mo.md(
+        f"Train class counts: {dict(zip(labels_train.tolist(), counts_train.tolist()))}"
+    )
+    mo.md(f"Test class counts: {dict(zip(labels_test.tolist(), counts_test.tolist()))}")
+    return
+
+
+# ---------- Preprocess ----------
+@app.cell
+def _(build_preprocessor, to_numpy_after_fit_transform, X_train_pl, X_test_pl, scaler):
+    preproc = build_preprocessor(
+        features=X_train_pl.columns, robust=(scaler.value == "robust")
+    )
+    X_train_np, X_test_np = to_numpy_after_fit_transform(preproc, X_train_pl, X_test_pl)
+    mo.md(
+        "**Preprocessing complete.** Features scaled and imputed (fit on train only)."
+    )
+    return preproc, X_train_np, X_test_np
+
+
+# ---------- Train + calibrate teacher ----------
+@app.cell
+def _(
+    train_teacher,
+    calibrate_temperature,
+    X_train_np,
+    y_train_pl,
+    X_test_np,
+    y_test_pl,
+    epochs,
+    batch,
+    calibrate,
+):
+    teacher = train_teacher(
+        X_train_np,
+        y_train_pl.to_numpy(),
+        X_val=X_test_np,
+        y_val=y_test_pl.to_numpy(),
+        max_epochs=int(epochs.value),
+        batch_size=int(batch.value),
+    )
+    if calibrate.value:
+        T = calibrate_temperature(teacher, X_test_np, y_test_pl.to_numpy())
+        mo.md(f"**Teacher calibrated** with temperature **T = {T:.3f}**")
+    else:
+        mo.md("**Teacher trained (no calibration).**")
+    return teacher
+
+
+# ---------- Distil: teacher signals ----------
+@app.cell
+def _(
+    predict_logits,
+    logits_to_calibrated_probs,
+    teacher,
+    X_train_np,
+    X_test_np,
+    distil_with,
+):
+    logits_train = predict_logits(teacher, X_train_np)
+    logits_test = predict_logits(teacher, X_test_np)
+    if distil_with.value == "probs":
+        train_signal = logits_to_calibrated_probs(teacher, logits_train)
+        test_signal = logits_to_calibrated_probs(teacher, logits_test)
+    else:
+        train_signal = logits_train
+        test_signal = logits_test
+    mo.md("**Teacher signals prepared for distillation.**")
+    return train_signal, test_signal
+
+
+# ---------- Train student (LightGBM ensemble) ----------
+@app.cell
+def _(
+    StudentEnsemble,
+    X_train_np,
+    y_train_pl,
+    X_test_np,
+    distil_with,
+    train_signal,
+    test_signal,
+    n_members,
+):
+    student = StudentEnsemble(
+        n_members=int(n_members.value), distil_with=distil_with.value
+    )
+    if distil_with.value == "probs":
+        student.fit(
+            X_train_np,
+            y_train_pl.to_numpy(),
+            teacher_probs=train_signal,
+            class_weight="balanced",
+        )
+        y_pred_student = student.predict(X_test_np, teacher_probs=test_signal)
+        y_proba_student = student.predict_proba(X_test_np, teacher_probs=test_signal)
+    else:
+        student.fit(
+            X_train_np,
+            y_train_pl.to_numpy(),
+            teacher_logits=train_signal,
+            class_weight="balanced",
+        )
+        y_pred_student = student.predict(X_test_np, teacher_logits=test_signal)
+        y_proba_student = student.predict_proba(X_test_np, teacher_logits=test_signal)
+    mo.md("**Student (LightGBM ensemble) trained.**")
+    return student, y_pred_student, y_proba_student
+
+
+# ---------- Benchmark (Decision Tree) ----------
+@app.cell
+def _(train_decision_tree, X_train_np, y_train_pl, X_test_np):
+    dt = train_decision_tree(X_train_np, y_train_pl.to_numpy(), class_weight="balanced")
+    y_pred_dt = dt.predict(X_test_np)
+    return dt, y_pred_dt
+
+
+# ---------- Evaluate on TEST ----------
+@app.cell
+def _(
+    accuracy_score,
+    f1_score,
+    precision_score,
+    recall_score,
+    classification_report,
+    roc_auc_score,
+    confusion_matrix,
+    np,
+    y_test_pl,
+    y_pred_student,
+    y_proba_student,
+    y_pred_dt,
+    task,
+):
+    y_true = y_test_pl.to_numpy()
+
+    metrics_student = {
+        "accuracy": float(accuracy_score(y_true, y_pred_student)),
+        "f1_macro": float(f1_score(y_true, y_pred_student, average="macro")),
+        "precision_macro": float(
+            precision_score(y_true, y_pred_student, average="macro", zero_division=0)
+        ),
+        "recall_macro": float(recall_score(y_true, y_pred_student, average="macro")),
+        "report": classification_report(y_true, y_pred_student, digits=4),
+    }
+    try:
+        if task.value == "binary":
+            metrics_student["roc_auc"] = float(
+                roc_auc_score(y_true, y_proba_student[:, 1])
+            )
+        else:
+            metrics_student["roc_auc_ovr_macro"] = float(
+                roc_auc_score(
+                    y_true, y_proba_student, multi_class="ovr", average="macro"
+                )
+            )
+    except Exception:
+        pass
+
+    metrics_dt = {
+        "accuracy": float(accuracy_score(y_true, y_pred_dt)),
+        "f1_macro": float(f1_score(y_true, y_pred_dt, average="macro")),
+        "precision_macro": float(
+            precision_score(y_true, y_pred_dt, average="macro", zero_division=0)
+        ),
+        "recall_macro": float(recall_score(y_true, y_pred_dt, average="macro")),
+        "report": classification_report(y_true, y_pred_dt, digits=4),
+    }
+
+    mo.md("## Results – TEST set")
+    mo.md("### Student (LightGBM Ensemble)")
+    mo.println(metrics_student)
+    mo.code(metrics_student["report"])
+
+    mo.md("### Decision Tree (Benchmark)")
+    mo.println(metrics_dt)
+    mo.code(metrics_dt["report"])
+
+    return metrics_student, metrics_dt
+
+
+# ---------- Evaluate on UNSEEN (optional) ----------
+@app.cell
+def _(
+    pl,
+    Path,
+    preproc,
+    predict_logits,
+    logits_to_calibrated_probs,
+    teacher,
+    StudentEnsemble,
+    student,
+    distil_with,
+    data_unseen,
+    TARGETS,
+    task,
+    accuracy_score,
+    f1_score,
+    precision_score,
+    recall_score,
+    classification_report,
+    roc_auc_score,
+):
+    if not data_unseen.value:
+        mo.md("(No unseen dataset provided.)")
+        return None
+    unseen_path = Path(data_unseen.value)
+    df = pl.read_parquet(unseen_path)
+    X_unseen_pl = df.select(
+        preproc.get_feature_names_out().tolist()
+        if hasattr(preproc, "get_feature_names_out")
+        else df.columns
+    )
+    X_unseen_np = (
+        preproc.transform(df.select(preproc.transformers_[0][2])).to_numpy()
+        if hasattr(preproc, "transformers_")
+        else preproc.transform(df.select(df.columns)).to_numpy()
+    )
+    y_unseen = df.select(TARGETS[task.value]).to_series().to_numpy()
+
+    logits_unseen = predict_logits(teacher, X_unseen_np)
+    if distil_with.value == "probs":
+        teacher_unseen_signal = logits_to_calibrated_probs(teacher, logits_unseen)
+        y_pred_student_u = student.predict(
+            X_unseen_np, teacher_probs=teacher_unseen_signal
+        )
+        y_proba_student_u = student.predict_proba(
+            X_unseen_np, teacher_probs=teacher_unseen_signal
+        )
+    else:
+        y_pred_student_u = student.predict(X_unseen_np, teacher_logits=logits_unseen)
+        y_proba_student_u = student.predict_proba(
+            X_unseen_np, teacher_logits=logits_unseen
+        )
+
+    metrics_student_u = {
+        "accuracy": float(accuracy_score(y_unseen, y_pred_student_u)),
+        "f1_macro": float(f1_score(y_unseen, y_pred_student_u, average="macro")),
+        "precision_macro": float(
+            precision_score(
+                y_unseen, y_pred_student_u, average="macro", zero_division=0
+            )
+        ),
+        "recall_macro": float(
+            recall_score(y_unseen, y_pred_student_u, average="macro")
+        ),
+        "report": classification_report(y_unseen, y_pred_student_u, digits=4),
+    }
+    try:
+        metrics_student_u["roc_auc_ovr_macro"] = float(
+            roc_auc_score(
+                y_unseen,
+                y_proba_student_u,
+                multi_class=("ovr" if len(np.unique(y_unseen)) > 2 else None),
+                average="macro",
+            )
+        )
+    except Exception:
+        pass
+
+    mo.md("## Robustness – UNSEEN set")
+    mo.println(metrics_student_u)
+    mo.code(metrics_student_u["report"])
+    return metrics_student_u
+
+
+# ---------- Save artefacts (optional) ----------
+@app.cell
+def _(save_artifacts, preproc, student, task):
+    if save_artifacts.value:
+        from pathlib import Path
+        from joblib import dump
+
+        outdir = Path("models")
+        outdir.mkdir(parents=True, exist_ok=True)
+        dump(preproc, outdir / f"preproc_{task.value}.joblib")
+        dump(student, outdir / f"student_ensemble_{task.value}.joblib")
+        mo.md(f"Saved artefacts to `{outdir}`.")
+    else:
+        mo.md("(Saving disabled.)")
+    return
+
+
+@app.cell
 def _(mo):
     mo.md(r"""### Teacher Model Training""")
     return
