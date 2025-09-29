@@ -1235,17 +1235,32 @@ def _():
     from sklearn.impute import SimpleImputer
     from sklearn.pipeline import Pipeline
     from sklearn.compose import ColumnTransformer
-    
+
     from src.knowledge_distillation_ensemble.ml.training.teacher_model import (
-        train_teacher, predict_logits, calibrate_temperature, logits_to_calibrated_probs
+        train_teacher,
+        predict_logits,
+        calibrate_temperature,
+        logits_to_calibrated_probs,
     )
-    from src.knowledge_distillation_ensemble.ml.training.student_model import StudentEnsemble
-    from src.knowledge_distillation_ensemble.ml.training.benchmark_model import train_benchmark_ensemble
-    
+    from src.knowledge_distillation_ensemble.ml.training.student_model import (
+        StudentEnsemble,
+    )
+    from src.knowledge_distillation_ensemble.ml.training.benchmark_model import (
+        train_benchmark_ensemble,
+    )
+
     return (
-        np, RobustScaler, SimpleImputer, Pipeline, ColumnTransformer,
-        train_teacher, predict_logits, calibrate_temperature, logits_to_calibrated_probs,
-        StudentEnsemble, train_benchmark_ensemble
+        np,
+        RobustScaler,
+        SimpleImputer,
+        Pipeline,
+        ColumnTransformer,
+        train_teacher,
+        predict_logits,
+        calibrate_temperature,
+        logits_to_calibrated_probs,
+        StudentEnsemble,
+        train_benchmark_ensemble,
     )
 
 
@@ -1262,23 +1277,48 @@ def _(mo):
 def _(ColumnTransformer, Pipeline, RobustScaler, SimpleImputer):
     # Define feature columns for ML training
     FEATURES = [
-        "flow_bytes_per_second", "flow_packets_per_second", "packet_length_mean",
-        "flow_duration", "average_packet_size", "total_packets", "total_bytes",
-        "header_length_total", "fin_flag_count", "syn_flag_count", "rst_flag_count",
-        "psh_flag_count", "ack_flag_count", "ece_flag_count", "cwr_flag_count",
-        "urg_flag_count", "packet_length_min", "packet_length_max", 
-        "packet_length_std", "packet_length_range", "forward_packets_per_second",
-        "backward_packets_per_second", "flow_iat_mean",
+        "flow_bytes_per_second",
+        "flow_packets_per_second",
+        "packet_length_mean",
+        "flow_duration",
+        "average_packet_size",
+        "total_packets",
+        "total_bytes",
+        "header_length_total",
+        "fin_flag_count",
+        "syn_flag_count",
+        "rst_flag_count",
+        "psh_flag_count",
+        "ack_flag_count",
+        "ece_flag_count",
+        "cwr_flag_count",
+        "urg_flag_count",
+        "packet_length_min",
+        "packet_length_max",
+        "packet_length_std",
+        "packet_length_range",
+        "forward_packets_per_second",
+        "backward_packets_per_second",
+        "flow_iat_mean",
     ]
-    
+
     # Build preprocessing pipeline
-    preprocessor = ColumnTransformer([
-        ("features", Pipeline([
-            ("imputer", SimpleImputer(strategy="median")),
-            ("scaler", RobustScaler(unit_variance=True))
-        ]), FEATURES)
-    ], remainder="drop")
-    
+    preprocessor = ColumnTransformer(
+        [
+            (
+                "features",
+                Pipeline(
+                    [
+                        ("imputer", SimpleImputer(strategy="median")),
+                        ("scaler", RobustScaler(unit_variance=True)),
+                    ]
+                ),
+                FEATURES,
+            )
+        ],
+        remainder="drop",
+    )
+
     print(f"Selected {len(FEATURES)} features for ML training")
     return FEATURES, preprocessor
 
@@ -1287,39 +1327,53 @@ def _(ColumnTransformer, Pipeline, RobustScaler, SimpleImputer):
 def _(FEATURES, np, preprocessor, real_world_test, test_analysis, train_analysis):
     # Prepare training and test data
     print("Preparing training data...")
-    train_df = train_analysis.select(FEATURES + ["label_multiclass", "label_binary"]).collect()
-    test_df = test_analysis.select(FEATURES + ["label_multiclass", "label_binary"]).collect()
-    unseen_df = real_world_test.select(FEATURES + ["label_multiclass", "label_binary"]).collect()
-    
+    train_df = train_analysis.select(
+        FEATURES + ["label_multiclass", "label_binary"]
+    ).collect()
+    test_df = test_analysis.select(
+        FEATURES + ["label_multiclass", "label_binary"]
+    ).collect()
+    unseen_df = real_world_test.select(
+        FEATURES + ["label_multiclass", "label_binary"]
+    ).collect()
+
     # Extract features and labels
     X_train_raw = train_df.select(FEATURES)
     y_train_multi = train_df.select("label_multiclass").to_numpy().flatten()
     y_train_binary = train_df.select("label_binary").to_numpy().flatten()
-    
+
     X_test_raw = test_df.select(FEATURES)
     y_test_multi = test_df.select("label_multiclass").to_numpy().flatten()
     y_test_binary = test_df.select("label_binary").to_numpy().flatten()
-    
+
     X_unseen_raw = unseen_df.select(FEATURES)
     y_unseen_multi = unseen_df.select("label_multiclass").to_numpy().flatten()
     y_unseen_binary = unseen_df.select("label_binary").to_numpy().flatten()
-    
+
     # Apply preprocessing
     X_train = preprocessor.fit_transform(X_train_raw).to_numpy()
     X_test = preprocessor.transform(X_test_raw).to_numpy()
     X_unseen = preprocessor.transform(X_unseen_raw).to_numpy()
-    
+
     print(f"Training data: {X_train.shape}")
     print(f"Test data: {X_test.shape}")
     print(f"Unseen data: {X_unseen.shape}")
     print(f"Binary classes in training: {np.unique(y_train_binary)}")
     print(f"Multiclass classes in training: {np.unique(y_train_multi)}")
-    
+
     return (
-        X_train, X_test, X_unseen,
-        y_train_binary, y_test_binary, y_unseen_binary,
-        y_train_multi, y_test_multi, y_unseen_multi,
-        train_df, test_df, unseen_df
+        X_train,
+        X_test,
+        X_unseen,
+        y_train_binary,
+        y_test_binary,
+        y_unseen_binary,
+        y_train_multi,
+        y_test_multi,
+        y_unseen_multi,
+        train_df,
+        test_df,
+        unseen_df,
     )
 
 
@@ -1333,48 +1387,56 @@ def _(mo):
 
 
 @app.cell
-def _(X_train, X_test, calibrate_temperature, train_teacher, y_train_multi, y_test_multi):
+def _(
+    X_train, X_test, calibrate_temperature, train_teacher, y_train_multi, y_test_multi
+):
     # Train teacher model for multiclass classification
     print("Training teacher model (multiclass)...")
     teacher_multi = train_teacher(
-        X_train, y_train_multi,
-        X_val=X_test, y_val=y_test_multi,
+        X_train,
+        y_train_multi,
+        X_val=X_test,
+        y_val=y_test_multi,
         max_epochs=15,
         batch_size=2048,
         hidden=(256, 128, 64),
         dropout=0.1,
         lr=1e-3,
-        seed=42
+        seed=42,
     )
-    
+
     # Calibrate teacher temperature for better probability estimates
     print("Calibrating teacher temperature...")
     temp_multi = calibrate_temperature(teacher_multi, X_test, y_test_multi)
     print(f"Calibrated temperature (multiclass): {temp_multi:.3f}")
-    
+
     return teacher_multi, temp_multi
 
 
 @app.cell
-def _(X_train, X_test, calibrate_temperature, train_teacher, y_train_binary, y_test_binary):
+def _(
+    X_train, X_test, calibrate_temperature, train_teacher, y_train_binary, y_test_binary
+):
     # Train teacher model for binary classification
     print("Training teacher model (binary)...")
     teacher_binary = train_teacher(
-        X_train, y_train_binary,
-        X_val=X_test, y_val=y_test_binary,
+        X_train,
+        y_train_binary,
+        X_val=X_test,
+        y_val=y_test_binary,
         max_epochs=15,
         batch_size=2048,
         hidden=(256, 128, 64),
         dropout=0.1,
         lr=1e-3,
-        seed=42
+        seed=42,
     )
-    
+
     # Calibrate teacher temperature
     print("Calibrating teacher temperature...")
     temp_binary = calibrate_temperature(teacher_binary, X_test, y_test_binary)
     print(f"Calibrated temperature (binary): {temp_binary:.3f}")
-    
+
     return teacher_binary, temp_binary
 
 
@@ -1389,60 +1451,84 @@ def _(mo):
 
 @app.cell
 def _(
-    StudentEnsemble, X_train, X_test, logits_to_calibrated_probs, 
-    predict_logits, teacher_multi, y_train_multi
+    StudentEnsemble,
+    X_train,
+    X_test,
+    logits_to_calibrated_probs,
+    predict_logits,
+    teacher_multi,
+    y_train_multi,
 ):
     # Generate teacher predictions for multiclass distillation
     print("Generating teacher predictions for distillation (multiclass)...")
     teacher_logits_train_multi = predict_logits(teacher_multi, X_train)
     teacher_logits_test_multi = predict_logits(teacher_multi, X_test)
-    
-    teacher_probs_train_multi = logits_to_calibrated_probs(teacher_multi, teacher_logits_train_multi)
-    teacher_probs_test_multi = logits_to_calibrated_probs(teacher_multi, teacher_logits_test_multi)
-    
+
+    teacher_probs_train_multi = logits_to_calibrated_probs(
+        teacher_multi, teacher_logits_train_multi
+    )
+    teacher_probs_test_multi = logits_to_calibrated_probs(
+        teacher_multi, teacher_logits_test_multi
+    )
+
     # Train student ensemble (multiclass)
     print("Training student ensemble with knowledge distillation (multiclass)...")
     student_multi = StudentEnsemble(n_members=3, distil_with="probs")
     student_multi.fit(
-        X_train, y_train_multi,
+        X_train,
+        y_train_multi,
         teacher_probs=teacher_probs_train_multi,
-        class_weight="balanced"
+        class_weight="balanced",
     )
-    
+
     print(f"Student ensemble trained with models: {student_multi.get_model_names()}")
     return (
-        teacher_logits_train_multi, teacher_logits_test_multi,
-        teacher_probs_train_multi, teacher_probs_test_multi,
-        student_multi
+        teacher_logits_train_multi,
+        teacher_logits_test_multi,
+        teacher_probs_train_multi,
+        teacher_probs_test_multi,
+        student_multi,
     )
 
 
 @app.cell
 def _(
-    StudentEnsemble, X_train, X_test, logits_to_calibrated_probs,
-    predict_logits, teacher_binary, y_train_binary
+    StudentEnsemble,
+    X_train,
+    X_test,
+    logits_to_calibrated_probs,
+    predict_logits,
+    teacher_binary,
+    y_train_binary,
 ):
     # Generate teacher predictions for binary distillation
     print("Generating teacher predictions for distillation (binary)...")
     teacher_logits_train_binary = predict_logits(teacher_binary, X_train)
     teacher_logits_test_binary = predict_logits(teacher_binary, X_test)
-    
-    teacher_probs_train_binary = logits_to_calibrated_probs(teacher_binary, teacher_logits_train_binary)
-    teacher_probs_test_binary = logits_to_calibrated_probs(teacher_binary, teacher_logits_test_binary)
-    
+
+    teacher_probs_train_binary = logits_to_calibrated_probs(
+        teacher_binary, teacher_logits_train_binary
+    )
+    teacher_probs_test_binary = logits_to_calibrated_probs(
+        teacher_binary, teacher_logits_test_binary
+    )
+
     # Train student ensemble (binary)
     print("Training student ensemble with knowledge distillation (binary)...")
     student_binary = StudentEnsemble(n_members=3, distil_with="probs")
     student_binary.fit(
-        X_train, y_train_binary,
+        X_train,
+        y_train_binary,
         teacher_probs=teacher_probs_train_binary,
-        class_weight="balanced"
+        class_weight="balanced",
     )
-    
+
     return (
-        teacher_logits_train_binary, teacher_logits_test_binary,
-        teacher_probs_train_binary, teacher_probs_test_binary,
-        student_binary
+        teacher_logits_train_binary,
+        teacher_logits_test_binary,
+        teacher_probs_train_binary,
+        teacher_probs_test_binary,
+        student_binary,
     )
 
 
@@ -1450,23 +1536,25 @@ def _(
 def _(X_train, train_benchmark_ensemble, y_train_binary, y_train_multi):
     # Train benchmark models for comparison
     print("Training benchmark models...")
-    
+
     benchmark_multi = train_benchmark_ensemble(
-        X_train, y_train_multi,
+        X_train,
+        y_train_multi,
         model_type="random_forest",
         n_estimators=100,
         class_weight="balanced",
-        random_state=42
+        random_state=42,
     )
-    
+
     benchmark_binary = train_benchmark_ensemble(
-        X_train, y_train_binary,
-        model_type="random_forest", 
+        X_train,
+        y_train_binary,
+        model_type="random_forest",
         n_estimators=100,
         class_weight="balanced",
-        random_state=42
+        random_state=42,
     )
-    
+
     print("Benchmark models trained successfully")
     return benchmark_binary, benchmark_multi
 
@@ -1475,178 +1563,247 @@ def _(X_train, train_benchmark_ensemble, y_train_binary, y_train_multi):
 def _():
     # Import evaluation metrics
     from sklearn.metrics import (
-        accuracy_score, f1_score, precision_score, recall_score,
-        classification_report, roc_auc_score, confusion_matrix
+        accuracy_score,
+        f1_score,
+        precision_score,
+        recall_score,
+        classification_report,
+        roc_auc_score,
+        confusion_matrix,
     )
+
     return (
-        accuracy_score, f1_score, precision_score, recall_score,
-        classification_report, roc_auc_score, confusion_matrix
+        accuracy_score,
+        f1_score,
+        precision_score,
+        recall_score,
+        classification_report,
+        roc_auc_score,
+        confusion_matrix,
     )
 
 
 @app.cell
 def _(
-    X_test, X_unseen, accuracy_score, benchmark_binary, benchmark_multi,
-    f1_score, logits_to_calibrated_probs, np, precision_score,
-    predict_logits, recall_score, roc_auc_score, student_binary,
-    student_multi, teacher_binary, teacher_multi,
-    teacher_probs_test_binary, teacher_probs_test_multi,
-    y_test_binary, y_test_multi, y_unseen_binary, y_unseen_multi
+    X_test,
+    X_unseen,
+    accuracy_score,
+    benchmark_binary,
+    benchmark_multi,
+    f1_score,
+    logits_to_calibrated_probs,
+    np,
+    precision_score,
+    predict_logits,
+    recall_score,
+    roc_auc_score,
+    student_binary,
+    student_multi,
+    teacher_binary,
+    teacher_multi,
+    teacher_probs_test_binary,
+    teacher_probs_test_multi,
+    y_test_binary,
+    y_test_multi,
+    y_unseen_binary,
+    y_unseen_multi,
 ):
     # Evaluate all models on test set
     print("=== TEST SET EVALUATION ===\n")
-    
+
     def evaluate_model(y_true, y_pred, y_proba, model_name, task_type):
         acc = accuracy_score(y_true, y_pred)
-        f1 = f1_score(y_true, y_pred, average='macro')
-        precision = precision_score(y_true, y_pred, average='macro', zero_division=0)
-        recall = recall_score(y_true, y_pred, average='macro')
-        
+        f1 = f1_score(y_true, y_pred, average="macro")
+        precision = precision_score(y_true, y_pred, average="macro", zero_division=0)
+        recall = recall_score(y_true, y_pred, average="macro")
+
         print(f"{model_name} ({task_type}):")
         print(f"  Accuracy: {acc:.4f}")
         print(f"  Macro-F1: {f1:.4f}")
         print(f"  Precision: {precision:.4f}")
         print(f"  Recall: {recall:.4f}")
-        
+
         if y_proba is not None:
             try:
                 if task_type == "binary":
                     auc = roc_auc_score(y_true, y_proba[:, 1])
                     print(f"  ROC-AUC: {auc:.4f}")
                 else:
-                    auc = roc_auc_score(y_true, y_proba, multi_class='ovr', average='macro')
+                    auc = roc_auc_score(
+                        y_true, y_proba, multi_class="ovr", average="macro"
+                    )
                     print(f"  ROC-AUC (macro): {auc:.4f}")
             except:
                 pass
         print()
-        
+
         return {
-            'accuracy': acc, 'f1_macro': f1, 'precision': precision, 
-            'recall': recall, 'y_pred': y_pred, 'y_proba': y_proba
+            "accuracy": acc,
+            "f1_macro": f1,
+            "precision": precision,
+            "recall": recall,
+            "y_pred": y_pred,
+            "y_proba": y_proba,
         }
-    
+
     # Test set evaluation
     results_test = {}
-    
+
     # Multiclass evaluation
     print("MULTICLASS CLASSIFICATION:\n")
-    
+
     # Teacher predictions
     teacher_logits_multi = predict_logits(teacher_multi, X_test)
-    teacher_probs_multi = logits_to_calibrated_probs(teacher_multi, teacher_logits_multi)
+    teacher_probs_multi = logits_to_calibrated_probs(
+        teacher_multi, teacher_logits_multi
+    )
     teacher_pred_multi = np.argmax(teacher_probs_multi, axis=1)
-    results_test['teacher_multi'] = evaluate_model(
+    results_test["teacher_multi"] = evaluate_model(
         y_test_multi, teacher_pred_multi, teacher_probs_multi, "Teacher", "multiclass"
     )
-    
+
     # Student predictions
-    student_pred_multi = student_multi.predict(X_test, teacher_probs=teacher_probs_test_multi)
-    student_probs_multi = student_multi.predict_proba(X_test, teacher_probs=teacher_probs_test_multi)
-    results_test['student_multi'] = evaluate_model(
-        y_test_multi, student_pred_multi, student_probs_multi, "Student Ensemble", "multiclass"
+    student_pred_multi = student_multi.predict(
+        X_test, teacher_probs=teacher_probs_test_multi
     )
-    
+    student_probs_multi = student_multi.predict_proba(
+        X_test, teacher_probs=teacher_probs_test_multi
+    )
+    results_test["student_multi"] = evaluate_model(
+        y_test_multi,
+        student_pred_multi,
+        student_probs_multi,
+        "Student Ensemble",
+        "multiclass",
+    )
+
     # Benchmark predictions
     benchmark_pred_multi = benchmark_multi.predict(X_test)
     benchmark_probs_multi = benchmark_multi.predict_proba(X_test)
-    results_test['benchmark_multi'] = evaluate_model(
-        y_test_multi, benchmark_pred_multi, benchmark_probs_multi, "Benchmark", "multiclass"
+    results_test["benchmark_multi"] = evaluate_model(
+        y_test_multi,
+        benchmark_pred_multi,
+        benchmark_probs_multi,
+        "Benchmark",
+        "multiclass",
     )
-    
+
     print("\nBINARY CLASSIFICATION:\n")
-    
+
     # Teacher predictions
     teacher_logits_bin = predict_logits(teacher_binary, X_test)
     teacher_probs_bin = logits_to_calibrated_probs(teacher_binary, teacher_logits_bin)
     teacher_pred_bin = np.argmax(teacher_probs_bin, axis=1)
-    results_test['teacher_binary'] = evaluate_model(
+    results_test["teacher_binary"] = evaluate_model(
         y_test_binary, teacher_pred_bin, teacher_probs_bin, "Teacher", "binary"
     )
-    
+
     # Student predictions
-    student_pred_bin = student_binary.predict(X_test, teacher_probs=teacher_probs_test_binary)
-    student_probs_bin = student_binary.predict_proba(X_test, teacher_probs=teacher_probs_test_binary)
-    results_test['student_binary'] = evaluate_model(
+    student_pred_bin = student_binary.predict(
+        X_test, teacher_probs=teacher_probs_test_binary
+    )
+    student_probs_bin = student_binary.predict_proba(
+        X_test, teacher_probs=teacher_probs_test_binary
+    )
+    results_test["student_binary"] = evaluate_model(
         y_test_binary, student_pred_bin, student_probs_bin, "Student Ensemble", "binary"
     )
-    
+
     # Benchmark predictions
     benchmark_pred_bin = benchmark_binary.predict(X_test)
     benchmark_probs_bin = benchmark_binary.predict_proba(X_test)
-    results_test['benchmark_binary'] = evaluate_model(
+    results_test["benchmark_binary"] = evaluate_model(
         y_test_binary, benchmark_pred_bin, benchmark_probs_bin, "Benchmark", "binary"
     )
-    
+
     return results_test
 
 
 @app.cell
 def _(
-    X_unseen, benchmark_binary, benchmark_multi, logits_to_calibrated_probs,
-    np, predict_logits, student_binary, student_multi, teacher_binary,
-    teacher_multi, y_unseen_binary, y_unseen_multi
+    X_unseen,
+    benchmark_binary,
+    benchmark_multi,
+    logits_to_calibrated_probs,
+    np,
+    predict_logits,
+    student_binary,
+    student_multi,
+    teacher_binary,
+    teacher_multi,
+    y_unseen_binary,
+    y_unseen_multi,
 ):
     # Evaluate on unseen real-world data
     print("=== UNSEEN DATA EVALUATION (Robustness Test) ===\n")
-    
+
     def evaluate_model_simple(y_true, y_pred, model_name, task_type):
         from sklearn.metrics import accuracy_score, f1_score
+
         acc = accuracy_score(y_true, y_pred)
-        f1 = f1_score(y_true, y_pred, average='macro')
+        f1 = f1_score(y_true, y_pred, average="macro")
         print(f"{model_name} ({task_type}): Accuracy={acc:.4f}, F1={f1:.4f}")
-        return {'accuracy': acc, 'f1_macro': f1}
-    
+        return {"accuracy": acc, "f1_macro": f1}
+
     results_unseen = {}
-    
+
     # Multiclass on unseen data
     print("MULTICLASS CLASSIFICATION:\n")
-    
+
     # Generate teacher outputs for unseen data
     teacher_logits_unseen_multi = predict_logits(teacher_multi, X_unseen)
-    teacher_probs_unseen_multi = logits_to_calibrated_probs(teacher_multi, teacher_logits_unseen_multi)
-    
+    teacher_probs_unseen_multi = logits_to_calibrated_probs(
+        teacher_multi, teacher_logits_unseen_multi
+    )
+
     # Teacher
     teacher_pred_unseen_multi = np.argmax(teacher_probs_unseen_multi, axis=1)
-    results_unseen['teacher_multi'] = evaluate_model_simple(
+    results_unseen["teacher_multi"] = evaluate_model_simple(
         y_unseen_multi, teacher_pred_unseen_multi, "Teacher", "multiclass"
     )
-    
+
     # Student (using teacher's outputs for distillation)
-    student_pred_unseen_multi = student_multi.predict(X_unseen, teacher_probs=teacher_probs_unseen_multi)
-    results_unseen['student_multi'] = evaluate_model_simple(
+    student_pred_unseen_multi = student_multi.predict(
+        X_unseen, teacher_probs=teacher_probs_unseen_multi
+    )
+    results_unseen["student_multi"] = evaluate_model_simple(
         y_unseen_multi, student_pred_unseen_multi, "Student Ensemble", "multiclass"
     )
-    
+
     # Benchmark
     benchmark_pred_unseen_multi = benchmark_multi.predict(X_unseen)
-    results_unseen['benchmark_multi'] = evaluate_model_simple(
+    results_unseen["benchmark_multi"] = evaluate_model_simple(
         y_unseen_multi, benchmark_pred_unseen_multi, "Benchmark", "multiclass"
     )
-    
+
     print("\nBINARY CLASSIFICATION:\n")
-    
+
     # Generate teacher outputs for binary
     teacher_logits_unseen_bin = predict_logits(teacher_binary, X_unseen)
-    teacher_probs_unseen_bin = logits_to_calibrated_probs(teacher_binary, teacher_logits_unseen_bin)
-    
+    teacher_probs_unseen_bin = logits_to_calibrated_probs(
+        teacher_binary, teacher_logits_unseen_bin
+    )
+
     # Teacher
     teacher_pred_unseen_bin = np.argmax(teacher_probs_unseen_bin, axis=1)
-    results_unseen['teacher_binary'] = evaluate_model_simple(
+    results_unseen["teacher_binary"] = evaluate_model_simple(
         y_unseen_binary, teacher_pred_unseen_bin, "Teacher", "binary"
     )
-    
+
     # Student
-    student_pred_unseen_bin = student_binary.predict(X_unseen, teacher_probs=teacher_probs_unseen_bin)
-    results_unseen['student_binary'] = evaluate_model_simple(
+    student_pred_unseen_bin = student_binary.predict(
+        X_unseen, teacher_probs=teacher_probs_unseen_bin
+    )
+    results_unseen["student_binary"] = evaluate_model_simple(
         y_unseen_binary, student_pred_unseen_bin, "Student Ensemble", "binary"
     )
-    
+
     # Benchmark
     benchmark_pred_unseen_bin = benchmark_binary.predict(X_unseen)
-    results_unseen['benchmark_binary'] = evaluate_model_simple(
+    results_unseen["benchmark_binary"] = evaluate_model_simple(
         y_unseen_binary, benchmark_pred_unseen_bin, "Benchmark", "binary"
     )
-    
+
     return results_unseen
 
 
@@ -1654,95 +1811,97 @@ def _(
 def _(mo, results_test, results_unseen):
     # Create comprehensive results summary
     summary = "## Knowledge Distillation Results Summary\n\n"
-    
+
     summary += "### Key Findings\n\n"
-    
+
     # Test performance comparison
     summary += "#### Test Set Performance\n\n"
     summary += "| Model | Task | Accuracy | Macro-F1 | Performance Gap |\n"
     summary += "|-------|------|----------|----------|----------------|\n"
-    
+
     # Multiclass results
-    teacher_acc_multi = results_test['teacher_multi']['accuracy']
-    student_acc_multi = results_test['student_multi']['accuracy']
-    benchmark_acc_multi = results_test['benchmark_multi']['accuracy']
-    
-    teacher_f1_multi = results_test['teacher_multi']['f1_macro']
-    student_f1_multi = results_test['student_multi']['f1_macro']
-    benchmark_f1_multi = results_test['benchmark_multi']['f1_macro']
-    
+    teacher_acc_multi = results_test["teacher_multi"]["accuracy"]
+    student_acc_multi = results_test["student_multi"]["accuracy"]
+    benchmark_acc_multi = results_test["benchmark_multi"]["accuracy"]
+
+    teacher_f1_multi = results_test["teacher_multi"]["f1_macro"]
+    student_f1_multi = results_test["student_multi"]["f1_macro"]
+    benchmark_f1_multi = results_test["benchmark_multi"]["f1_macro"]
+
     summary += f"| Teacher | Multiclass | {teacher_acc_multi:.4f} | {teacher_f1_multi:.4f} | Reference |\n"
-    summary += f"| Student | Multiclass | {student_acc_multi:.4f} | {student_f1_multi:.4f} | {(student_acc_multi/teacher_acc_multi-1)*100:+.1f}% |\n"
-    summary += f"| Benchmark | Multiclass | {benchmark_acc_multi:.4f} | {benchmark_f1_multi:.4f} | {(benchmark_acc_multi/teacher_acc_multi-1)*100:+.1f}% |\n"
-    
+    summary += f"| Student | Multiclass | {student_acc_multi:.4f} | {student_f1_multi:.4f} | {(student_acc_multi / teacher_acc_multi - 1) * 100:+.1f}% |\n"
+    summary += f"| Benchmark | Multiclass | {benchmark_acc_multi:.4f} | {benchmark_f1_multi:.4f} | {(benchmark_acc_multi / teacher_acc_multi - 1) * 100:+.1f}% |\n"
+
     # Binary results
-    teacher_acc_bin = results_test['teacher_binary']['accuracy']
-    student_acc_bin = results_test['student_binary']['accuracy']
-    benchmark_acc_bin = results_test['benchmark_binary']['accuracy']
-    
-    teacher_f1_bin = results_test['teacher_binary']['f1_macro']
-    student_f1_bin = results_test['student_binary']['f1_macro']
-    benchmark_f1_bin = results_test['benchmark_binary']['f1_macro']
-    
+    teacher_acc_bin = results_test["teacher_binary"]["accuracy"]
+    student_acc_bin = results_test["student_binary"]["accuracy"]
+    benchmark_acc_bin = results_test["benchmark_binary"]["accuracy"]
+
+    teacher_f1_bin = results_test["teacher_binary"]["f1_macro"]
+    student_f1_bin = results_test["student_binary"]["f1_macro"]
+    benchmark_f1_bin = results_test["benchmark_binary"]["f1_macro"]
+
     summary += f"| Teacher | Binary | {teacher_acc_bin:.4f} | {teacher_f1_bin:.4f} | Reference |\n"
-    summary += f"| Student | Binary | {student_acc_bin:.4f} | {student_f1_bin:.4f} | {(student_acc_bin/teacher_acc_bin-1)*100:+.1f}% |\n"
-    summary += f"| Benchmark | Binary | {benchmark_acc_bin:.4f} | {benchmark_f1_bin:.4f} | {(benchmark_acc_bin/teacher_acc_bin-1)*100:+.1f}% |\n"
-    
+    summary += f"| Student | Binary | {student_acc_bin:.4f} | {student_f1_bin:.4f} | {(student_acc_bin / teacher_acc_bin - 1) * 100:+.1f}% |\n"
+    summary += f"| Benchmark | Binary | {benchmark_acc_bin:.4f} | {benchmark_f1_bin:.4f} | {(benchmark_acc_bin / teacher_acc_bin - 1) * 100:+.1f}% |\n"
+
     # Robustness analysis
     summary += "\n#### Robustness on Unseen Data (CICDIAD2024)\n\n"
     summary += "| Model | Task | Unseen Accuracy | Performance Retention |\n"
     summary += "|-------|------|----------------|----------------------|\n"
-    
+
     # Multiclass robustness
-    teacher_unseen_multi = results_unseen['teacher_multi']['accuracy']
-    student_unseen_multi = results_unseen['student_multi']['accuracy']
-    benchmark_unseen_multi = results_unseen['benchmark_multi']['accuracy']
-    
-    summary += f"| Teacher | Multiclass | {teacher_unseen_multi:.4f} | {teacher_unseen_multi/teacher_acc_multi*100:.1f}% |\n"
-    summary += f"| Student | Multiclass | {student_unseen_multi:.4f} | {student_unseen_multi/student_acc_multi*100:.1f}% |\n"
-    summary += f"| Benchmark | Multiclass | {benchmark_unseen_multi:.4f} | {benchmark_unseen_multi/benchmark_acc_multi*100:.1f}% |\n"
-    
+    teacher_unseen_multi = results_unseen["teacher_multi"]["accuracy"]
+    student_unseen_multi = results_unseen["student_multi"]["accuracy"]
+    benchmark_unseen_multi = results_unseen["benchmark_multi"]["accuracy"]
+
+    summary += f"| Teacher | Multiclass | {teacher_unseen_multi:.4f} | {teacher_unseen_multi / teacher_acc_multi * 100:.1f}% |\n"
+    summary += f"| Student | Multiclass | {student_unseen_multi:.4f} | {student_unseen_multi / student_acc_multi * 100:.1f}% |\n"
+    summary += f"| Benchmark | Multiclass | {benchmark_unseen_multi:.4f} | {benchmark_unseen_multi / benchmark_acc_multi * 100:.1f}% |\n"
+
     # Binary robustness
-    teacher_unseen_bin = results_unseen['teacher_binary']['accuracy']
-    student_unseen_bin = results_unseen['student_binary']['accuracy']
-    benchmark_unseen_bin = results_unseen['benchmark_binary']['accuracy']
-    
-    summary += f"| Teacher | Binary | {teacher_unseen_bin:.4f} | {teacher_unseen_bin/teacher_acc_bin*100:.1f}% |\n"
-    summary += f"| Student | Binary | {student_unseen_bin:.4f} | {student_unseen_bin/student_acc_bin*100:.1f}% |\n"
-    summary += f"| Benchmark | Binary | {benchmark_unseen_bin:.4f} | {benchmark_unseen_bin/benchmark_acc_bin*100:.1f}% |\n"
-    
+    teacher_unseen_bin = results_unseen["teacher_binary"]["accuracy"]
+    student_unseen_bin = results_unseen["student_binary"]["accuracy"]
+    benchmark_unseen_bin = results_unseen["benchmark_binary"]["accuracy"]
+
+    summary += f"| Teacher | Binary | {teacher_unseen_bin:.4f} | {teacher_unseen_bin / teacher_acc_bin * 100:.1f}% |\n"
+    summary += f"| Student | Binary | {student_unseen_bin:.4f} | {student_unseen_bin / student_acc_bin * 100:.1f}% |\n"
+    summary += f"| Benchmark | Binary | {benchmark_unseen_bin:.4f} | {benchmark_unseen_bin / benchmark_acc_bin * 100:.1f}% |\n"
+
     # Key insights
     summary += "\n#### Key Insights\n\n"
-    
+
     # Knowledge distillation effectiveness
     student_vs_benchmark_multi = (student_acc_multi - benchmark_acc_multi) * 100
     student_vs_benchmark_bin = (student_acc_bin - benchmark_acc_bin) * 100
-    
+
     summary += f"**Knowledge Distillation Effectiveness:**\n"
     summary += f"- Student outperforms benchmark by {student_vs_benchmark_multi:.1f}% (multiclass) and {student_vs_benchmark_bin:.1f}% (binary)\n"
-    summary += f"- Student retains {student_acc_multi/teacher_acc_multi*100:.1f}% of teacher performance (multiclass)\n"
-    summary += f"- Student retains {student_acc_bin/teacher_acc_bin*100:.1f}% of teacher performance (binary)\n\n"
-    
+    summary += f"- Student retains {student_acc_multi / teacher_acc_multi * 100:.1f}% of teacher performance (multiclass)\n"
+    summary += f"- Student retains {student_acc_bin / teacher_acc_bin * 100:.1f}% of teacher performance (binary)\n\n"
+
     # Robustness comparison
-    best_robustness_multi = max(teacher_unseen_multi/teacher_acc_multi, 
-                               student_unseen_multi/student_acc_multi,
-                               benchmark_unseen_multi/benchmark_acc_multi)
-    
-    if student_unseen_multi/student_acc_multi == best_robustness_multi:
+    best_robustness_multi = max(
+        teacher_unseen_multi / teacher_acc_multi,
+        student_unseen_multi / student_acc_multi,
+        benchmark_unseen_multi / benchmark_acc_multi,
+    )
+
+    if student_unseen_multi / student_acc_multi == best_robustness_multi:
         most_robust_multi = "Student"
-    elif teacher_unseen_multi/teacher_acc_multi == best_robustness_multi:
+    elif teacher_unseen_multi / teacher_acc_multi == best_robustness_multi:
         most_robust_multi = "Teacher"
     else:
         most_robust_multi = "Benchmark"
-    
+
     summary += f"**Robustness Analysis:**\n"
     summary += f"- Most robust model (multiclass): {most_robust_multi}\n"
     summary += f"- Knowledge distillation helps generalization: Student shows strong performance retention\n"
     summary += f"- All models experience some performance drop on unseen data, indicating distribution shift\n\n"
-    
+
     summary += "**Conclusion:**\n"
     summary += "The knowledge distillation approach successfully creates a competitive ensemble that benefits from the teacher's knowledge while maintaining good robustness on unseen data."
-    
+
     mo.md(summary)
     return
 

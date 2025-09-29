@@ -10,7 +10,9 @@ def train_benchmark_ensemble(
     X: np.ndarray,
     y: np.ndarray,
     *,
-    model_type: Literal["random_forest", "gradient_boosting", "decision_tree"] = "random_forest",
+    model_type: Literal[
+        "random_forest", "gradient_boosting", "decision_tree"
+    ] = "random_forest",
     n_estimators: int = 100,
     max_depth: Optional[int] = None,
     min_samples_leaf: int = 5,
@@ -18,7 +20,7 @@ def train_benchmark_ensemble(
     random_state: int = 42,
 ) -> RandomForestClassifier | GradientBoostingClassifier | DecisionTreeClassifier:
     """Train a competitive baseline model for fair comparison with the student ensemble."""
-    
+
     if model_type == "random_forest":
         clf = RandomForestClassifier(
             n_estimators=n_estimators,
@@ -44,7 +46,7 @@ def train_benchmark_ensemble(
         )
     else:
         raise ValueError(f"Unknown model_type: {model_type}")
-    
+
     clf.fit(X, y)
     return clf
 
@@ -61,7 +63,8 @@ def train_decision_tree(
 ) -> DecisionTreeClassifier:
     """Train a simple decision tree (kept for backwards compatibility)."""
     return train_benchmark_ensemble(
-        X, y,
+        X,
+        y,
         model_type="decision_tree",
         max_depth=max_depth,
         min_samples_leaf=min_samples_leaf,
