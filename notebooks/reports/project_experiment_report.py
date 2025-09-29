@@ -741,6 +741,9 @@ def _():
         chart_ks_table,
         show_feature_summary_for_datasets,
         show_ks_between_datasets,
+        compute_median_delta,
+        chart_median_delta,
+        median_delta_table,
     )
 
     seaborn_init()
@@ -756,6 +759,9 @@ def _():
         compute_mapping_percent,
         show_feature_summary_for_datasets,
         show_ks_between_datasets,
+        compute_median_delta,
+        chart_median_delta,
+        median_delta_table,
     )
 
 
@@ -805,18 +811,66 @@ def _(
 @app.cell
 def _(
     Path,
-    chart_feature_summary,
-    show_feature_summary_for_datasets,
+    compute_ks_table,
     harmonized_cic23_path,
     harmonized_diad_path,
 ):
-    # Feature medians & IQR (aggregate visuals)
-    summary_features = [
-        "flow_bytes_per_second",
-        "flow_packets_per_second",
-        "packet_length_mean",
-    ]
+    # Derive top-8 features by KS for focused medians/IQR
+    if (
+        harmonized_cic23_path
+        and harmonized_diad_path
+        and Path(harmonized_cic23_path).exists()
+        and Path(harmonized_diad_path).exists()
+    ):
+        _ks_df = compute_ks_table(
+            str(harmonized_cic23_path),
+            str(harmonized_diad_path),
+            [
+                "flow_bytes_per_second",
+                "flow_packets_per_second",
+                "packet_length_mean",
+                "flow_duration",
+                "average_packet_size",
+                "total_packets",
+                "total_bytes",
+                "header_length_total",
+                "fin_flag_count",
+                "syn_flag_count",
+                "rst_flag_count",
+                "psh_flag_count",
+                "ack_flag_count",
+                "ece_flag_count",
+                "cwr_flag_count",
+                "urg_flag_count",
+                "packet_length_min",
+                "packet_length_max",
+                "packet_length_std",
+                "packet_length_range",
+                "forward_packets_per_second",
+                "backward_packets_per_second",
+                "flow_iat_mean",
+            ],
+        )
+        top_features = _ks_df.sort("ks", descending=True).head(8)["feature"].to_list()
+    else:
+        top_features = [
+            "flow_bytes_per_second",
+            "flow_packets_per_second",
+            "packet_length_mean",
+        ]
+    top_features
+    return (top_features,)
 
+
+@app.cell
+def _(
+    Path,
+    show_feature_summary_for_datasets,
+    harmonized_cic23_path,
+    harmonized_diad_path,
+    top_features,
+):
+    # Focused medians/IQR on top-8 KS features
     show_feature_summary_for_datasets(
         str(harmonized_cic23_path)
         if harmonized_cic23_path and Path(harmonized_cic23_path).exists()
@@ -824,7 +878,8 @@ def _(
         str(harmonized_diad_path)
         if harmonized_diad_path and Path(harmonized_diad_path).exists()
         else None,
-        summary_features,
+        top_features,
+        title="Feature medians (points) and IQR (bars) — top-8 features by KS",
     )
     return
 
@@ -833,26 +888,48 @@ def _(
 def _(
     Path,
     chart_ks_table,
-    show_ks_between_datasets,
+    compute_ks_table,
     harmonized_cic23_path,
     harmonized_diad_path,
 ):
-    # KS distance (quantifies shift)
-    ks_features = [
+    # KS distance charts (two visuals) for all 23 features
+    all_features = [
         "flow_bytes_per_second",
         "flow_packets_per_second",
         "packet_length_mean",
+        "flow_duration",
+        "average_packet_size",
+        "total_packets",
+        "total_bytes",
+        "header_length_total",
+        "fin_flag_count",
+        "syn_flag_count",
+        "rst_flag_count",
+        "psh_flag_count",
+        "ack_flag_count",
+        "ece_flag_count",
+        "cwr_flag_count",
+        "urg_flag_count",
+        "packet_length_min",
+        "packet_length_max",
+        "packet_length_std",
+        "packet_length_range",
+        "forward_packets_per_second",
+        "backward_packets_per_second",
+        "flow_iat_mean",
     ]
-
-    show_ks_between_datasets(
-        str(harmonized_cic23_path)
-        if harmonized_cic23_path and Path(harmonized_cic23_path).exists()
-        else None,
-        str(harmonized_diad_path)
-        if harmonized_diad_path and Path(harmonized_diad_path).exists()
-        else None,
-        ks_features,
-    )
+    if (
+        harmonized_cic23_path
+        and harmonized_diad_path
+        and Path(harmonized_cic23_path).exists()
+        and Path(harmonized_diad_path).exists()
+    ):
+        ks_df = compute_ks_table(
+            str(harmonized_cic23_path), str(harmonized_diad_path), all_features
+        )
+        chart_ks_table(ks_df, "KS distance: CICIOT2023 vs CICDIAD2024")
+    else:
+        print("Need both harmonized datasets for KS comparison.")
     return
 
 

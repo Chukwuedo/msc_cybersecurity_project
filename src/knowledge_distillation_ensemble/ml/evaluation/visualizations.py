@@ -12,13 +12,36 @@ import polars as pl
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
+from matplotlib import ticker as mtick
 
 
 # ---- Seaborn setup --------------------------------------------------------
 
 
+try:
+    # Optional: standard label order for consistency
+    from src.knowledge_distillation_ensemble.ml.data.label_harmonizer import (
+        STANDARD_LABELS,
+    )
+except Exception:  # pragma: no cover
+    STANDARD_LABELS = [
+        "Benign",
+        "DDoS",
+        "DoS",
+        "Brute_Force",
+        "Mirai",
+        "Reconnaissance",
+        "Spoofing",
+        "Other",
+        "Unknown",
+    ]
+
+
 def seaborn_init() -> None:
-    sns.set_theme(style="whitegrid", context="talk")
+    sns.set_theme(style="whitegrid", context="notebook")
+    plt.rcParams["figure.dpi"] = 110
+    plt.rcParams["axes.titlesize"] = 12
+    plt.rcParams["axes.labelsize"] = 11
 
 
 # ---- Label distributions --------------------------------------------------
@@ -33,22 +56,50 @@ def compute_label_stats(parquet_path: Path | str) -> pl.DataFrame:
     )
 
 
+def _order_labels(labels: List[str]) -> List[str]:
+    # Keep present labels; apply preferred order
+    pref = {lab: i for i, lab in enumerate(STANDARD_LABELS)}
+    return sorted(labels, key=lambda x: pref.get(x, 1_000 + hash(x) % 1_000))
+
+
 def chart_label_stats(stats: pl.DataFrame, title: str):
     df = stats.to_pandas()
+    order = _order_labels(df["label"].tolist())
 
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4), constrained_layout=True)
-    sns.barplot(ax=axes[0], data=df, x="label", y="n", color="#4C78A8")
+    fig, axes = plt.subplots(1, 2, figsize=(13, 4), constrained_layout=True)
+
+    sns.barplot(ax=axes[0], data=df, x="label", y="n", order=order, color="#4C78A8")
     axes[0].set_title(f"{title} - counts")
     axes[0].set_xlabel("label")
     axes[0].set_ylabel("count")
-    plt.setp(axes[0].get_xticklabels(), rotation=45, ha="right")
+    plt.setp(axes[0].get_xticklabels(), rotation=35, ha="right")
+    axes[0].yaxis.set_major_formatter(
+        mtick.FuncFormatter(
+            lambda x, pos: f"{x / 1e6:.1f}M" if x >= 1e6 else f"{x / 1e3:.0f}K"
+        )
+    )
 
-    sns.barplot(ax=axes[1], data=df, x="label", y="pct", color="#72B7B2")
+    sns.barplot(ax=axes[1], data=df, x="label", y="pct", order=order, color="#72B7B2")
     axes[1].set_title(f"{title} - percent")
     axes[1].set_xlabel("label")
     axes[1].set_ylabel("%")
     axes[1].set_ylim(0, 100)
-    plt.setp(axes[1].get_xticklabels(), rotation=45, ha="right")
+    plt.setp(axes[1].get_xticklabels(), rotation=35, ha="right")
+
+    # Annotate percent bars with values (top-3 only for clarity)
+    top3 = df.sort_values("pct", ascending=False).head(3)
+    for _, row in top3.iterrows():
+        idx = order.index(row["label"]) if row["label"] in order else None
+        if idx is not None:
+            axes[1].text(
+                idx,
+                min(row["pct"] + 2.0, 98.0),
+                f"{row['pct']:.1f}%",
+                ha="center",
+                va="bottom",
+                fontsize=9,
+                color="#22504F",
+            )
 
     plt.show()
     return fig
@@ -90,8 +141,36 @@ def compute_mapping_percent(
 
 def chart_mapping_heatmap(ct_top: pl.DataFrame, title: str):
     df = ct_top.to_pandas().pivot(index="label", columns="original_label", values="pct")
+    # Order axes for readability
+    df = df.reindex(index=_order_labels(list(df.index)))
+    df = df[sorted(df.columns)]
+
     fig, ax = plt.subplots(figsize=(12, 5), constrained_layout=True)
-    sns.heatmap(df, ax=ax, cmap="viridis", annot=False)
+    sns.heatmap(
+        df,
+        ax=ax,
+        cmap="viridis",
+        vmin=0,
+        vmax=100,
+        cbar_kws={"label": "%"},
+        annot=df.where(df >= 1).notna(),
+        fmt="",
+    )
+    # Add text annotations for cells >=1%
+    for y, row in enumerate(df.index):
+        for x, col in enumerate(df.columns):
+            val = df.loc[row, col]
+            if (isinstance(val, (int, float, np.floating))) and (val >= 1):
+                ax.text(
+                    x + 0.5,
+                    y + 0.5,
+                    f"{float(val):.1f}",
+                    ha="center",
+                    va="center",
+                    color="white",
+                    fontsize=8,
+                )
+
     ax.set_title(title)
     ax.set_xlabel("original")
     ax.set_ylabel("harmonized")
@@ -126,19 +205,25 @@ def compute_feature_summary(
         )
         m, q1, q3 = s.row(0)
         out.append((dataset_name, f, m, q1, q3))
-    return pl.DataFrame(out, schema=["dataset", "feature", "median", "q1", "q3"])
+    return pl.DataFrame(
+        out,
+        schema=["dataset", "feature", "median", "q1", "q3"],
+    )
 
 
 def chart_feature_summary(summary: pl.DataFrame, title: str):
     df = summary.to_pandas()
-    # Compute whiskers as IQR range
-    df["low"] = df["q1"]
-    df["high"] = df["q3"]
+    df["low"], df["high"] = df["q1"], df["q3"]
+
+    # Robust x-limits per overall range (avoid long tails dominating)
+    x_min = max(0.0, float(df["low"].min()))
+    x_max = float(df["high"].quantile(0.95)) * 1.1
 
     fig, ax = plt.subplots(
-        figsize=(10, max(3, 0.6 * df["feature"].nunique())), constrained_layout=True
+        figsize=(10, max(3, 0.6 * df["feature"].nunique())),
+        constrained_layout=True,
     )
-    # Horizontal ranges per dataset/feature
+
     for ds, sub in df.groupby("dataset"):
         ax.hlines(
             y=sub["feature"],
@@ -148,9 +233,11 @@ def chart_feature_summary(summary: pl.DataFrame, title: str):
             linewidth=6,
         )
         ax.plot(sub["median"], sub["feature"], "o", label=f"{ds} median")
+
     ax.set_title(title)
     ax.set_xlabel("value")
     ax.set_ylabel("")
+    ax.set_xlim(x_min, x_max)
     ax.legend(loc="best", ncol=2)
     plt.show()
     return fig
@@ -163,6 +250,10 @@ def compute_ks(
     db = _safe_sample(path_b, [feature], n).filter(pl.col(feature).is_finite())
     if da.height == 0 or db.height == 0:
         return float("nan")
+
+    # Ensure consistent dtype for concatenation and histogramming
+    da = da.with_columns(pl.col(feature).cast(pl.Float64))
+    db = db.with_columns(pl.col(feature).cast(pl.Float64))
 
     pooled = pl.concat([da, db])
     s = pooled.select(
@@ -177,7 +268,8 @@ def compute_ks(
     edges = np.linspace(mn, mx, num=bins + 1)
 
     def cdf_np(df: pl.DataFrame) -> np.ndarray:
-        vals = df.select(feature).to_series().to_numpy()
+        vals_arr = df.select(feature).to_series().to_numpy()
+        vals = vals_arr.astype(float, copy=False)
         counts, _ = np.histogram(vals, bins=edges)
         total = counts.sum()
         if total == 0:
@@ -197,14 +289,103 @@ def compute_ks_table(
 
 
 def chart_ks_table(df: pl.DataFrame, title: str):
-    pdf = df.to_pandas()
-    fig, ax = plt.subplots(figsize=(8, 4), constrained_layout=True)
+    pdf = df.sort("ks", descending=True).to_pandas()
+
+    # Dynamic width to fit many feature labels
+    width = max(10, 0.45 * len(pdf["feature"]))
+    fig, ax = plt.subplots(figsize=(width, 4), constrained_layout=True)
     sns.barplot(ax=ax, data=pdf, x="feature", y="ks", color="#F58518")
     ax.set_title(title)
     ax.set_xlabel("feature")
     ax.set_ylabel("KS distance")
+    ax.set_ylim(0, 1)
+    for i, v in enumerate(pdf["ks"].tolist()):
+        ax.text(i, v + 0.02, f"{v:.2f}", ha="center", va="bottom", fontsize=8)
+    # rotate labels to reduce clutter
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right", fontsize=8)
+    # footnote about sampling
+    fig.text(
+        0.5,
+        -0.02,
+        "Sampled n=40k per dataset per feature",
+        ha="center",
+        va="top",
+        fontsize=9,
+        color="#555",
+    )
     plt.show()
     return fig
+
+
+# ---- Median delta (%) across datasets -------------------------------------
+
+
+def compute_median_delta(
+    path_a: Path | str,
+    path_b: Path | str,
+    features: Iterable[str],
+    name_a: str = "CICIOT2023",
+    name_b: str = "CICDIAD2024",
+) -> pl.DataFrame:
+    """Compute per-feature medians on both datasets and the delta (%).
+    Δ% is computed as ((median_b - median_a) / max(|median_a|, 1e-12)) * 100.
+    """
+    fa = list(features)
+    fb = list(features)
+    da = _safe_sample(path_a, fa, 80_000)
+    db = _safe_sample(path_b, fb, 80_000)
+
+    rows = []
+    for f in features:
+        ma = float(da.select(pl.col(f).median()).item())
+        mb = float(db.select(pl.col(f).median()).item())
+        denom = max(abs(ma), 1e-12)
+        delta_pct = ((mb - ma) / denom) * 100.0
+        rows.append((f, ma, mb, delta_pct))
+
+    return pl.DataFrame(
+        rows,
+        schema=[
+            "feature",
+            f"{name_a}_median",
+            f"{name_b}_median",
+            "delta_pct",
+        ],
+    ).sort("delta_pct", descending=True)
+
+
+def chart_median_delta(df: pl.DataFrame, title: str):
+    pdf = df.sort("delta_pct", descending=True).to_pandas()
+    width = max(10, 0.45 * len(pdf["feature"]))
+    fig, ax = plt.subplots(figsize=(width, 4), constrained_layout=True)
+    sns.barplot(ax=ax, data=pdf, x="feature", y="delta_pct", color="#E45756")
+    ax.set_title(title)
+    ax.set_xlabel("feature")
+    ax.set_ylabel("Δ median % (2024 vs 2023)")
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right", fontsize=8)
+    # annotate
+    for i, v in enumerate(pdf["delta_pct"].tolist()):
+        offset = 0.02 * (1 if v >= 0 else -1)
+        ax.text(
+            i,
+            v + offset,
+            f"{v:.1f}%",
+            ha="center",
+            va="bottom",
+            fontsize=8,
+        )
+    plt.show()
+    return fig
+
+
+def median_delta_table(df: pl.DataFrame, top: int = 10) -> pl.DataFrame:
+    """Return a compact table of top-|Δ%| features with both medians."""
+    return (
+        df.with_columns(pl.col("delta_pct").abs().alias("abs_delta"))
+        .sort("abs_delta", descending=True)
+        .drop("abs_delta")
+        .head(top)
+    )
 
 
 # ---- Notebook-friendly wrappers ------------------------------------------
@@ -253,7 +434,7 @@ def show_ks_between_datasets(
     features: Iterable[str],
     title: str = "Cross-dataset shift (KS distance)",
 ):
-    """Compute and render KS shift for selected features between two datasets."""
+    """Compute and render KS shift between two datasets (compact)."""
     if not path_a or not path_b:
         print("Need both harmonized datasets for KS comparison.")
         return None
