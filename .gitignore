@@ -204,9 +204,10 @@ cython_debug/
 # Ruff stuff:
 .ruff_cache/
 
-data/parquet/
-data/processed/
-ml/models/
+parquet/
+processed/
+models/
+lightning_logs/
 
 # PyPI configuration file
 .pypirc
