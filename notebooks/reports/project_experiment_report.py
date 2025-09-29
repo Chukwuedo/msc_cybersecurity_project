@@ -65,6 +65,7 @@ def _():
     return (
         DatasetAnalyzer,
         DatasetComparator,
+        Path,
         Settings,
         analyze_dataset_file,
         get_dataset_preview,
@@ -710,6 +711,154 @@ def _(diad_harmonized):
 
 @app.cell
 def _(mo):
+    mo.md(
+        r"""
+    #### Aggregate Visualizations
+
+    We visualize small, meaningful summaries:
+    - Class imbalance (counts and percent) per dataset
+    - Mapping validation (CICIOT2023) with row-normalized heatmap and purity
+    - Cross-dataset shift via feature medians/IQR and KS distance
+    """
+    )
+    return
+
+
+@app.cell
+def _():
+    # Lightweight helpers (seaborn/matplotlib based)
+    from src.knowledge_distillation_ensemble.ml.evaluation.visualizations import (
+        seaborn_init,
+        compute_label_stats,
+        chart_label_stats,
+        compute_mapping_percent,
+        chart_mapping_heatmap,
+        compute_feature_summary,
+        chart_feature_summary,
+        compute_ks_table,
+        chart_ks_table,
+    )
+
+    seaborn_init()
+    return (
+        seaborn_init,
+        chart_feature_summary,
+        chart_ks_table,
+        chart_label_stats,
+        chart_mapping_heatmap,
+        compute_feature_summary,
+        compute_ks_table,
+        compute_label_stats,
+        compute_mapping_percent,
+    )
+
+
+@app.cell
+def _(
+    Path,
+    compute_label_stats,
+    chart_label_stats,
+    harmonized_cic23_path,
+    harmonized_diad_path,
+):
+    # Class imbalance (seaborn figures are shown inline when created)
+    if harmonized_cic23_path and Path(harmonized_cic23_path).exists():
+        stats23 = compute_label_stats(str(harmonized_cic23_path))
+        chart_label_stats(stats23, "CICIOT2023 (harmonized)")
+    else:
+        print("CICIOT2023: harmonized parquet not available")
+
+    if harmonized_diad_path and Path(harmonized_diad_path).exists():
+        stats24 = compute_label_stats(str(harmonized_diad_path))
+        chart_label_stats(stats24, "CICDIAD2024 (harmonized)")
+    else:
+        print("CICDIAD2024: harmonized parquet not available")
+    return
+
+
+@app.cell
+def _(
+    Path,
+    chart_mapping_heatmap,
+    compute_mapping_percent,
+    harmonized_cic23_path,
+):
+    # Mapping validation (CICIOT2023)
+    if harmonized_cic23_path and Path(harmonized_cic23_path).exists():
+        ct_top, diag = compute_mapping_percent(str(harmonized_cic23_path), top_original=15)
+        purity = float(diag["pct"].mean()) if diag.height else float("nan")
+        print(f"Mapping purity (mean diagonal %): {purity:.2f}%")
+        chart_mapping_heatmap(ct_top, "Original → Harmonized (row-normalized %)")
+    else:
+        print("CICIOT2023 harmonized parquet not available for mapping heatmap.")
+    return
+
+
+@app.cell
+def _(
+    Path,
+    chart_feature_summary,
+    compute_feature_summary,
+    harmonized_cic23_path,
+    harmonized_diad_path,
+):
+    # Feature medians & IQR and KS stats (aggregate visuals)
+    import polars as pl
+
+    features = [
+        "flow_bytes_per_second",
+        "flow_packets_per_second",
+        "packet_length_mean",
+    ]
+
+    summaries = []
+    if harmonized_cic23_path and Path(harmonized_cic23_path).exists():
+        summaries.append(
+            compute_feature_summary(str(harmonized_cic23_path), features, "CICIOT2023")
+        )
+    if harmonized_diad_path and Path(harmonized_diad_path).exists():
+        summaries.append(
+            compute_feature_summary(str(harmonized_diad_path), features, "CICDIAD2024")
+        )
+
+    if summaries:
+        summary_df = summaries[0] if len(summaries) == 1 else pl.concat(summaries, how="vertical_relaxed")
+        chart_feature_summary(summary_df, "Feature medians (points) and IQR (bars)")
+    else:
+        print("Missing datasets for summary statistics.")
+    return
+
+
+@app.cell
+def _(
+    Path,
+    chart_ks_table,
+    compute_ks_table,
+    harmonized_cic23_path,
+    harmonized_diad_path,
+):
+    # KS distance (quantifies shift)
+    features = [
+        "flow_bytes_per_second",
+        "flow_packets_per_second",
+        "packet_length_mean",
+    ]
+
+    if (
+        harmonized_cic23_path
+        and harmonized_diad_path
+        and Path(harmonized_cic23_path).exists()
+        and Path(harmonized_diad_path).exists()
+    ):
+        ks_df = compute_ks_table(str(harmonized_cic23_path), str(harmonized_diad_path), features)
+        chart_ks_table(ks_df, "Cross-dataset shift (KS distance)")
+    else:
+        print("Need both harmonized datasets for KS comparison.")
+    return
+
+
+@app.cell
+def _(mo):
     mo.md(r"""#### Teacher Model Training""")
     return
 
@@ -773,6 +922,29 @@ def _():
     # - Discussion of findings
     # - Future work recommendations
     print("Results analysis - To be implemented")
+    return
+
+
+@app.cell
+def _():
+    # Utility: regenerate harmonized files if needed (optional manual run)
+    # from src.knowledge_distillation_ensemble.ml.data.feature_harmonizer import (
+    #     FeatureHarmonizer,
+    # )
+
+    # fh = FeatureHarmonizer()
+
+    # cic23_in = settings.parquet_path / "ciciot2023_combined.parquet"
+    # diad_in = settings.parquet_path / "cicdiad2024_combined.parquet"
+    # cic23_out = settings.processed_parquet_path / "revised_ciciot2023.parquet"
+    # diad_out = settings.processed_parquet_path / "revised_cicdiad2024.parquet"
+
+    # print("Regeneration helper ready. Call fh.harmonize_dataset(...) as needed.")
+    # print(f"CICIOT2023 in/out: {cic23_in} -> {cic23_out}")
+    # print(f"CICDIAD2024 in/out: {diad_in} -> {diad_out}")
+    # return fh, cic23_in, diad_in, cic23_out, diad_out
+
+    print("Regeneration helper disabled. Uncomment lines in this cell to use.")
     return
 
 
