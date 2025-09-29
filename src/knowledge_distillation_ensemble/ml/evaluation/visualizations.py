@@ -465,3 +465,28 @@ def show_feature_summary_for_datasets(
         summary_df = pl.concat(summaries, how="vertical_relaxed")
     chart_feature_summary(summary_df, title)
     return None
+
+
+def show_analysis_label_distributions(
+    parquet_path: Path | str, title_prefix: str
+) -> None:
+    """Render binary and multiclass label distribution charts for a dataset.
+
+    Parameters:
+        parquet_path: Path to the analysis parquet file
+        title_prefix: Title prefix used in the chart titles
+    """
+    if parquet_path is None:
+        print(f"Missing analysis dataset: {parquet_path}")
+        return None
+    p = Path(parquet_path)
+    if not p.exists():
+        print(f"Missing analysis dataset: {parquet_path}")
+        return None
+
+    bstats = compute_label_binary_stats(str(p))
+    chart_label_binary(bstats, f"{title_prefix} label_binary")
+
+    mstats = compute_label_multiclass_stats(str(p))
+    chart_label_multiclass(mstats, f"{title_prefix} label_multiclass")
+    return None

@@ -746,6 +746,8 @@ def _():
         chart_label_binary,
         compute_label_multiclass_stats,
         chart_label_multiclass,
+        # New consolidated helper for analysis datasets
+        show_analysis_label_distributions,
     )
 
     seaborn_init()
@@ -760,6 +762,7 @@ def _():
         compute_label_multiclass_stats,
         compute_label_stats,
         compute_mapping_percent,
+        show_analysis_label_distributions,
         show_feature_summary_for_datasets,
     )
 
@@ -1001,7 +1004,7 @@ def _(mo):
     - I have also implemented a semantically coherent reclassification for labels across both datasets (e.g., DNS_Spoofing/MITM-ArpSpoofing → Spoofing; VulnerabilityScan → Reconnaissance).
     - Implications:
       - Minimal label leakage/ambiguity across datasets.
-      - Downstream evaluation will reflect true performance of machine learning security approach across class semantics rather than dataset-specific taxonomy.
+      - Downstream evaluation will reflect true performance of the machine learning security approach across class semantics rather than dataset-specific taxonomy.
 
     #### 4) Cross-dataset shift — KS distance (CICIOT2023 vs CICDIAD2024)
     - KS distance highlights which features change most across datasets (unitless, 0–1 scale):
@@ -1052,6 +1055,7 @@ def _():
     from src.knowledge_distillation_ensemble.ml.data.analysis_builder import (
         create_analysis_parquet,
     )
+    import polars as pl
 
     analysis_cic23_path = create_analysis_parquet("ciciot2023", seed=42, overwrite=True)
     analysis_diad_path = create_analysis_parquet("cicdiad2024", seed=42, overwrite=True)
@@ -1059,38 +1063,87 @@ def _():
     print("Analysis datasets ready:")
     print(f"  • CICIOT2023: {analysis_cic23_path}")
     print(f"  • CICDIAD2024: {analysis_diad_path}")
+
+    # Print per-class counts
+    def _print_counts(p, title):
+        print(f"\n{title} class counts")
+        df = pl.read_parquet(p, columns=["label_binary", "label_multiclass"])
+        bc = (
+            df.group_by("label_binary")
+            .count()
+            .rename({"count": "n"})
+            .sort("label_binary")
+        )
+        mc = (
+            df.group_by("label_multiclass")
+            .count()
+            .rename({"count": "n"})
+            .sort("label_multiclass")
+        )
+        print("label_binary:\n", bc)
+        print("label_multiclass:\n", mc)
+
+    _print_counts(str(analysis_cic23_path), "CICIOT2023 (analysis)")
+    _print_counts(str(analysis_diad_path), "CICDIAD2024 (analysis)")
     return analysis_cic23_path, analysis_diad_path
 
 
 @app.cell
-def _(
-    Path,
-    analysis_cic23_path,
-    analysis_diad_path,
-    chart_label_binary,
-    chart_label_multiclass,
-    chart_label_stats,
-    compute_label_binary_stats,
-    compute_label_multiclass_stats,
-    compute_label_stats,
-):
-    # Label distributions on analysis_* datasets
-    def _maybe_chart(path: Path, title_prefix: str):
-        if path and Path(path).exists():
-            # Text labels
-            stats = compute_label_stats(str(path))
-            chart_label_stats(stats, f"{title_prefix} (analysis)")
-            # Binary
-            bstats = compute_label_binary_stats(str(path))
-            chart_label_binary(bstats, f"{title_prefix} label_binary")
-            # Multiclass
-            mstats = compute_label_multiclass_stats(str(path))
-            chart_label_multiclass(mstats, f"{title_prefix} label_multiclass")
-        else:
-            print(f"Missing analysis dataset: {path}")
+def _(analysis_cic23_path, get_dataset_preview):
+    # Preview analysis CICIOT2023
+    if analysis_cic23_path and analysis_cic23_path.exists():
+        print("CICIOT2023 analysis preview:")
+        analysis_cic23_preview = get_dataset_preview(analysis_cic23_path, 10)
+    else:
+        print("CICIOT2023 analysis parquet not available")
+        analysis_cic23_preview = None
+    return (analysis_cic23_preview,)
 
-    _maybe_chart(analysis_cic23_path, "CICIOT2023")
-    _maybe_chart(analysis_diad_path, "CICDIAD2024")
+
+@app.cell
+def _(analysis_cic23_path, show_analysis_label_distributions):
+    show_analysis_label_distributions(analysis_cic23_path, "CICIOT2023")
+    return
+
+
+@app.cell
+def _(analysis_diad_path, show_analysis_label_distributions):
+    show_analysis_label_distributions(analysis_diad_path, "CICDIAD2024")
+    return
+
+
+@app.cell
+def _(analysis_cic23_preview):
+    analysis_cic23_preview
+    return
+
+
+@app.cell
+def _(analysis_diad_path, get_dataset_preview):
+    # Preview analysis CICDIAD2024
+    if analysis_diad_path and analysis_diad_path.exists():
+        print("CICDIAD2024 analysis preview:")
+        analysis_diad_preview = get_dataset_preview(analysis_diad_path, 10)
+    else:
+        print("CICDIAD2024 analysis parquet not available")
+        analysis_diad_preview = None
+    return (analysis_diad_preview,)
+
+
+@app.cell
+def _(analysis_diad_preview):
+    analysis_diad_preview
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""### Analysis Data Train-Test Split""")
+    return
+
+
+@app.cell
+def _():
     return
 
 
