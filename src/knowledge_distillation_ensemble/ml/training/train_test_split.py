@@ -15,7 +15,7 @@ from typing import Tuple
 
 import polars as pl
 
-from .analysis_builder import create_analysis_parquet
+from ..data.analysis_builder import create_analysis_parquet
 
 
 DEFAULT_DATASET = "ciciot2023"
