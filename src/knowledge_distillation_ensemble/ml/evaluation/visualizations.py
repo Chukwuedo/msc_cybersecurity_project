@@ -16,11 +16,13 @@ import numpy as np
 
 # ---- Seaborn setup --------------------------------------------------------
 
+
 def seaborn_init() -> None:
     sns.set_theme(style="whitegrid", context="talk")
 
 
 # ---- Label distributions --------------------------------------------------
+
 
 def compute_label_stats(parquet_path: Path | str) -> pl.DataFrame:
     lf = pl.scan_parquet(str(parquet_path)).select("label")
@@ -54,12 +56,14 @@ def chart_label_stats(stats: pl.DataFrame, title: str):
 
 # ---- Original -> harmonized mapping (CICIOT2023) -------------------------
 
+
 def compute_mapping_percent(
     parquet_path: Path | str, top_original: int = 15
 ) -> Tuple[pl.DataFrame, pl.DataFrame]:
     lf = pl.scan_parquet(str(parquet_path)).select(["original_label", "label"])
     ct = (
-        lf.group_by(["original_label", "label"]).count()
+        lf.group_by(["original_label", "label"])
+        .count()
         .rename({"count": "n"})
         .collect()
     )
@@ -78,18 +82,14 @@ def compute_mapping_percent(
     )
     ct_top = ct_pct.join(tops, on="original_label", how="inner")
 
-    diag = (
-        ct_pct.filter(pl.col("original_label") == pl.col("label")).select(
-            ["original_label", "pct"]
-        )
+    diag = ct_pct.filter(pl.col("original_label") == pl.col("label")).select(
+        ["original_label", "pct"]
     )
     return ct_top, diag
 
 
 def chart_mapping_heatmap(ct_top: pl.DataFrame, title: str):
-    df = ct_top.to_pandas().pivot(
-        index="label", columns="original_label", values="pct"
-    )
+    df = ct_top.to_pandas().pivot(index="label", columns="original_label", values="pct")
     fig, ax = plt.subplots(figsize=(12, 5), constrained_layout=True)
     sns.heatmap(df, ax=ax, cmap="viridis", annot=False)
     ax.set_title(title)
@@ -101,7 +101,10 @@ def chart_mapping_heatmap(ct_top: pl.DataFrame, title: str):
 
 # ---- Feature summaries and shift -----------------------------------------
 
-def _safe_sample(parquet_path: Path | str, columns: List[str], n: int = 40_000) -> pl.DataFrame:
+
+def _safe_sample(
+    parquet_path: Path | str, columns: List[str], n: int = 40_000
+) -> pl.DataFrame:
     lf = pl.scan_parquet(str(parquet_path)).select(columns)
     try:
         return lf.fetch(n)
@@ -132,10 +135,18 @@ def chart_feature_summary(summary: pl.DataFrame, title: str):
     df["low"] = df["q1"]
     df["high"] = df["q3"]
 
-    fig, ax = plt.subplots(figsize=(10, max(3, 0.6 * df["feature"].nunique())), constrained_layout=True)
+    fig, ax = plt.subplots(
+        figsize=(10, max(3, 0.6 * df["feature"].nunique())), constrained_layout=True
+    )
     # Horizontal ranges per dataset/feature
     for ds, sub in df.groupby("dataset"):
-        ax.hlines(y=sub["feature"], xmin=sub["low"], xmax=sub["high"], label=f"{ds} IQR", linewidth=6)
+        ax.hlines(
+            y=sub["feature"],
+            xmin=sub["low"],
+            xmax=sub["high"],
+            label=f"{ds} IQR",
+            linewidth=6,
+        )
         ax.plot(sub["median"], sub["feature"], "o", label=f"{ds} median")
     ax.set_title(title)
     ax.set_xlabel("value")
@@ -178,7 +189,9 @@ def compute_ks(
     return float(np.max(np.abs(ca - cb)))
 
 
-def compute_ks_table(path_a: Path | str, path_b: Path | str, features: Iterable[str]) -> pl.DataFrame:
+def compute_ks_table(
+    path_a: Path | str, path_b: Path | str, features: Iterable[str]
+) -> pl.DataFrame:
     rows = [(f, compute_ks(path_a, path_b, f)) for f in features]
     return pl.DataFrame(rows, schema=["feature", "ks"])
 

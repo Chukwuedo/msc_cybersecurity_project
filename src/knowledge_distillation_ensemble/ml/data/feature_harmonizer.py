@@ -3,6 +3,7 @@ Feature harmonizer for producing the 23 snake_case features
 from raw CICIOT2023 combined parquet, plus label harmonization
 and original_label preservation.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -19,7 +20,9 @@ class FeatureHarmonizer:
 
     def _exprs_ciciot2023(self, lf: pl.LazyFrame, label_column: str) -> list[pl.Expr]:
         def _coalesce(*cols: str) -> pl.Expr:
-            return pl.coalesce([pl.col(c) for c in cols if c in lf.columns] + [pl.lit(0)])
+            return pl.coalesce(
+                [pl.col(c) for c in cols if c in lf.columns] + [pl.lit(0)]
+            )
 
         return [
             pl.col("Duration").alias("flow_duration"),
@@ -43,7 +46,9 @@ class FeatureHarmonizer:
             pl.col("Number").alias("total_packets"),
             pl.col("Tot sum").alias("total_bytes"),
             pl.col("Tot size").alias("average_packet_size"),
-            (pl.col("Tot sum") / (pl.col("Duration") + pl.lit(1e-9))).alias("flow_bytes_per_second"),
+            (pl.col("Tot sum") / (pl.col("Duration") + pl.lit(1e-9))).alias(
+                "flow_bytes_per_second"
+            ),
             pl.col("Header_Length").alias("header_length_total"),
             pl.col(label_column).alias("_raw_label"),
         ]
@@ -59,7 +64,9 @@ class FeatureHarmonizer:
             pl.col("Packet Length Max").alias("packet_length_max"),
             pl.col("Packet Length Mean").alias("packet_length_mean"),
             pl.col("Packet Length Std").alias("packet_length_std"),
-            (pl.col("Packet Length Max") - pl.col("Packet Length Min")).alias("packet_length_range"),
+            (pl.col("Packet Length Max") - pl.col("Packet Length Min")).alias(
+                "packet_length_range"
+            ),
             pl.col("FIN Flag Count").alias("fin_flag_count"),
             pl.col("SYN Flag Count").alias("syn_flag_count"),
             pl.col("RST Flag Count").alias("rst_flag_count"),
@@ -69,14 +76,18 @@ class FeatureHarmonizer:
             pl.col("CWR Flag Count").alias("cwr_flag_count"),
             pl.col("URG Flag Count").alias("urg_flag_count"),
             # Use component sums available in combined file
-            (pl.col("Total Fwd Packet") + pl.col("Total Bwd packets")).alias("total_packets"),
+            (pl.col("Total Fwd Packet") + pl.col("Total Bwd packets")).alias(
+                "total_packets"
+            ),
             (
                 pl.col("Total Length of Fwd Packet")
                 + pl.col("Total Length of Bwd Packet")
             ).alias("total_bytes"),
             pl.col("Average Packet Size").alias("average_packet_size"),
             pl.col("Flow Bytes/s").alias("flow_bytes_per_second"),
-            (pl.col("Fwd Header Length") + pl.col("Bwd Header Length")).alias("header_length_total"),
+            (pl.col("Fwd Header Length") + pl.col("Bwd Header Length")).alias(
+                "header_length_total"
+            ),
             pl.col(label_column).alias("_raw_label"),
         ]
 
@@ -115,7 +126,9 @@ class FeatureHarmonizer:
 
         final = base.with_columns(
             pl.col("_raw_label").alias("original_label"),
-            pl.col("_raw_label").map_elements(_map_label, return_dtype=pl.String).alias("label"),
+            pl.col("_raw_label")
+            .map_elements(_map_label, return_dtype=pl.String)
+            .alias("label"),
         ).drop("_raw_label")
 
         # Write out lazily
@@ -123,6 +136,9 @@ class FeatureHarmonizer:
 
     # Back-compat API for existing calls
     def harmonize_ciciot2023(
-        self, input_path: Path | str, output_path: Path | str, label_column: str = "label"
+        self,
+        input_path: Path | str,
+        output_path: Path | str,
+        label_column: str = "label",
     ) -> None:
         self.harmonize_dataset(input_path, output_path, "ciciot2023", label_column)

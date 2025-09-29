@@ -37,6 +37,7 @@ def _(mo):
 @app.cell
 def _():
     import marimo as mo
+
     return (mo,)
 
 
@@ -62,6 +63,7 @@ def _():
         get_dataset_preview,
     )
     from src.knowledge_distillation_ensemble.config.settings import Settings
+
     return (
         DatasetAnalyzer,
         DatasetComparator,
@@ -785,7 +787,9 @@ def _(
 ):
     # Mapping validation (CICIOT2023)
     if harmonized_cic23_path and Path(harmonized_cic23_path).exists():
-        ct_top, diag = compute_mapping_percent(str(harmonized_cic23_path), top_original=15)
+        ct_top, diag = compute_mapping_percent(
+            str(harmonized_cic23_path), top_original=15
+        )
         purity = float(diag["pct"].mean()) if diag.height else float("nan")
         print(f"Mapping purity (mean diagonal %): {purity:.2f}%")
         chart_mapping_heatmap(ct_top, "Original → Harmonized (row-normalized %)")
@@ -822,7 +826,11 @@ def _(
         )
 
     if summaries:
-        summary_df = summaries[0] if len(summaries) == 1 else pl.concat(summaries, how="vertical_relaxed")
+        summary_df = (
+            summaries[0]
+            if len(summaries) == 1
+            else pl.concat(summaries, how="vertical_relaxed")
+        )
         chart_feature_summary(summary_df, "Feature medians (points) and IQR (bars)")
     else:
         print("Missing datasets for summary statistics.")
@@ -850,7 +858,9 @@ def _(
         and Path(harmonized_cic23_path).exists()
         and Path(harmonized_diad_path).exists()
     ):
-        ks_df = compute_ks_table(str(harmonized_cic23_path), str(harmonized_diad_path), features)
+        ks_df = compute_ks_table(
+            str(harmonized_cic23_path), str(harmonized_diad_path), features
+        )
         chart_ks_table(ks_df, "Cross-dataset shift (KS distance)")
     else:
         print("Need both harmonized datasets for KS comparison.")
