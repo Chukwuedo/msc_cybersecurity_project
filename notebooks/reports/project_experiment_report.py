@@ -739,6 +739,8 @@ def _():
         chart_feature_summary,
         compute_ks_table,
         chart_ks_table,
+        show_feature_summary_for_datasets,
+        show_ks_between_datasets,
     )
 
     seaborn_init()
@@ -752,6 +754,8 @@ def _():
         compute_ks_table,
         compute_label_stats,
         compute_mapping_percent,
+        show_feature_summary_for_datasets,
+        show_ks_between_datasets,
     )
 
 
@@ -802,38 +806,26 @@ def _(
 def _(
     Path,
     chart_feature_summary,
-    compute_feature_summary,
+    show_feature_summary_for_datasets,
     harmonized_cic23_path,
     harmonized_diad_path,
 ):
-    # Feature medians & IQR and KS stats (aggregate visuals)
-    import polars as pl
-
-    features = [
+    # Feature medians & IQR (aggregate visuals)
+    summary_features = [
         "flow_bytes_per_second",
         "flow_packets_per_second",
         "packet_length_mean",
     ]
 
-    summaries = []
-    if harmonized_cic23_path and Path(harmonized_cic23_path).exists():
-        summaries.append(
-            compute_feature_summary(str(harmonized_cic23_path), features, "CICIOT2023")
-        )
-    if harmonized_diad_path and Path(harmonized_diad_path).exists():
-        summaries.append(
-            compute_feature_summary(str(harmonized_diad_path), features, "CICDIAD2024")
-        )
-
-    if summaries:
-        summary_df = (
-            summaries[0]
-            if len(summaries) == 1
-            else pl.concat(summaries, how="vertical_relaxed")
-        )
-        chart_feature_summary(summary_df, "Feature medians (points) and IQR (bars)")
-    else:
-        print("Missing datasets for summary statistics.")
+    show_feature_summary_for_datasets(
+        str(harmonized_cic23_path)
+        if harmonized_cic23_path and Path(harmonized_cic23_path).exists()
+        else None,
+        str(harmonized_diad_path)
+        if harmonized_diad_path and Path(harmonized_diad_path).exists()
+        else None,
+        summary_features,
+    )
     return
 
 
@@ -841,29 +833,26 @@ def _(
 def _(
     Path,
     chart_ks_table,
-    compute_ks_table,
+    show_ks_between_datasets,
     harmonized_cic23_path,
     harmonized_diad_path,
 ):
     # KS distance (quantifies shift)
-    features = [
+    ks_features = [
         "flow_bytes_per_second",
         "flow_packets_per_second",
         "packet_length_mean",
     ]
 
-    if (
-        harmonized_cic23_path
-        and harmonized_diad_path
-        and Path(harmonized_cic23_path).exists()
-        and Path(harmonized_diad_path).exists()
-    ):
-        ks_df = compute_ks_table(
-            str(harmonized_cic23_path), str(harmonized_diad_path), features
-        )
-        chart_ks_table(ks_df, "Cross-dataset shift (KS distance)")
-    else:
-        print("Need both harmonized datasets for KS comparison.")
+    show_ks_between_datasets(
+        str(harmonized_cic23_path)
+        if harmonized_cic23_path and Path(harmonized_cic23_path).exists()
+        else None,
+        str(harmonized_diad_path)
+        if harmonized_diad_path and Path(harmonized_diad_path).exists()
+        else None,
+        ks_features,
+    )
     return
 
 

@@ -205,3 +205,63 @@ def chart_ks_table(df: pl.DataFrame, title: str):
     ax.set_ylabel("KS distance")
     plt.show()
     return fig
+
+
+# ---- Notebook-friendly wrappers ------------------------------------------
+
+
+def show_feature_summary_for_datasets(
+    path_a: Path | str | None,
+    path_b: Path | str | None,
+    features: Iterable[str],
+    name_a: str = "CICIOT2023",
+    name_b: str = "CICDIAD2024",
+    title: str = "Feature medians (points) and IQR (bars)",
+):
+    """Compute and render feature medians/IQR for available datasets.
+
+    Only small samples are used; renders a seaborn figure.
+    """
+    paths = []
+    if path_a:
+        p = Path(path_a)
+        if p.exists():
+            paths.append((p, name_a))
+    if path_b:
+        p = Path(path_b)
+        if p.exists():
+            paths.append((p, name_b))
+
+    if not paths:
+        print("Missing datasets for summary statistics.")
+        return None
+
+    summaries: List[pl.DataFrame] = []
+    for p, nm in paths:
+        summaries.append(compute_feature_summary(str(p), list(features), nm))
+
+    if len(summaries) == 1:
+        summary_df = summaries[0]
+    else:
+        summary_df = pl.concat(summaries, how="vertical_relaxed")
+    return chart_feature_summary(summary_df, title)
+
+
+def show_ks_between_datasets(
+    path_a: Path | str | None,
+    path_b: Path | str | None,
+    features: Iterable[str],
+    title: str = "Cross-dataset shift (KS distance)",
+):
+    """Compute and render KS shift for selected features between two datasets."""
+    if not path_a or not path_b:
+        print("Need both harmonized datasets for KS comparison.")
+        return None
+
+    pa, pb = Path(path_a), Path(path_b)
+    if not (pa.exists() and pb.exists()):
+        print("Need both harmonized datasets for KS comparison.")
+        return None
+
+    ks_df = compute_ks_table(str(pa), str(pb), list(features))
+    return chart_ks_table(ks_df, title)
