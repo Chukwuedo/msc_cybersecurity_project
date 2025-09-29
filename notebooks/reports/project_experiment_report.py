@@ -42,7 +42,6 @@ def _(mo):
 @app.cell
 def _():
     import marimo as mo
-
     return (mo,)
 
 
@@ -68,7 +67,6 @@ def _():
         get_dataset_preview,
     )
     from src.knowledge_distillation_ensemble.config.settings import Settings
-
     return (
         DatasetAnalyzer,
         DatasetComparator,
@@ -1087,7 +1085,7 @@ def _():
 
     _print_counts(str(analysis_cic23_path), "CICIOT2023 (analysis)")
     _print_counts(str(analysis_diad_path), "CICDIAD2024 (analysis)")
-    return analysis_cic23_path, analysis_diad_path
+    return analysis_cic23_path, analysis_diad_path, pl
 
 
 @app.cell
@@ -1150,8 +1148,7 @@ def _():
         get_stratified_split_lazy,
         compute_split_distributions,
     )
-
-    return get_stratified_split_lazy, compute_split_distributions
+    return compute_split_distributions, get_stratified_split_lazy
 
 
 @app.cell
@@ -1179,7 +1176,32 @@ def _(compute_split_distributions, split):
 
 
 @app.cell
-def _():
+def _(split):
+    train_analysis, test_analysis = split.train, split.test   #ciciot2023 dataset
+    return test_analysis, train_analysis
+
+
+@app.cell
+def _(analysis_cic23_path, pl):
+    real_world_test = pl.scan_parquet(str(analysis_cic23_path))   #cicdiad2024 dataset
+    return (real_world_test,)
+
+
+@app.cell
+def _(train_analysis):
+    train_analysis.head(5).collect()
+    return
+
+
+@app.cell
+def _(test_analysis):
+    test_analysis.head(5).collect()
+    return
+
+
+@app.cell
+def _(real_world_test):
+    real_world_test.head(5).collect()
     return
 
 
