@@ -11,7 +11,12 @@ app = marimo.App(
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""# Project Experiment Report""")
+    mo.md(
+        r"""
+    # University of London MSc Cyber Security
+    # Project Experiment Report
+    """
+    )
     return
 
 
@@ -37,7 +42,6 @@ def _(mo):
 @app.cell
 def _():
     import marimo as mo
-
     return (mo,)
 
 
@@ -63,7 +67,6 @@ def _():
         get_dataset_preview,
     )
     from src.knowledge_distillation_ensemble.config.settings import Settings
-
     return (
         DatasetAnalyzer,
         DatasetComparator,
@@ -1043,12 +1046,15 @@ def _(mo):
 
 @app.cell
 def _():
+    # Create (or reuse) analysis_* parquets with capped per-class samples
+    # - 200k for label_multiclass == 0 (Benign)
+    # - up to 100k for each of 1..7
     from src.knowledge_distillation_ensemble.ml.data.analysis_builder import (
         create_analysis_parquet,
     )
 
-    analysis_cic23_path = create_analysis_parquet("ciciot2023", seed=42)
-    analysis_diad_path = create_analysis_parquet("cicdiad2024", seed=42)
+    analysis_cic23_path = create_analysis_parquet("ciciot2023", seed=42, overwrite=True)
+    analysis_diad_path = create_analysis_parquet("cicdiad2024", seed=42, overwrite=True)
 
     print("Analysis datasets ready:")
     print(f"  • CICIOT2023: {analysis_cic23_path}")
@@ -1061,12 +1067,12 @@ def _(
     Path,
     analysis_cic23_path,
     analysis_diad_path,
-    compute_label_stats,
+    chart_label_binary,
+    chart_label_multiclass,
     chart_label_stats,
     compute_label_binary_stats,
-    chart_label_binary,
     compute_label_multiclass_stats,
-    chart_label_multiclass,
+    compute_label_stats,
 ):
     # Label distributions on analysis_* datasets
     def _maybe_chart(path: Path, title_prefix: str):

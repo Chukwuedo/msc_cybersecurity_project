@@ -99,19 +99,22 @@ def create_analysis_parquet(
         # Use REPEATABLE with class-offset to vary sequence per class
         rep_seed = seed + cls * 9973
         q = (
+            "SELECT * FROM ("
             "SELECT * FROM read_parquet('" + base + "') "
-            f"WHERE label_multiclass = {cls} "
-            f"USING SAMPLE RESERVOIR ({cap} ROWS) REPEATABLE ({rep_seed})"
+            f"WHERE label_multiclass = {cls}"
+            ") t USING SAMPLE RESERVOIR ("
+            + str(cap)
+            + " ROWS) REPEATABLE ("
+            + str(rep_seed)
+            + ")"
         )
         class_queries.append(q)
 
     union_query = " UNION ALL ".join(class_queries)
 
-    # Wrap with a deterministic shuffle using random() and a fixed seed
+    # Wrap union and write directly; REPEATABLE seeds ensure determinism
     with duckdb.connect() as con:
-        # Set seed for random()
-        con.execute(f"PRAGMA random_seed={seed}")
-        final_query = "SELECT * FROM (" + union_query + ") ORDER BY random()"
+        final_query = union_query
         out_escaped = str(out_path).replace("'", "''")
         copy_stmt = (
             "COPY ("
@@ -131,5 +134,9 @@ def create_all_analysis_parquets(
     """Create analysis parquets for all supported datasets."""
     results: Dict[str, Path] = {}
     for ds in _DATASETS.keys():
-        results[ds] = create_analysis_parquet(ds, seed=seed, overwrite=overwrite)
+        results[ds] = create_analysis_parquet(
+            ds,
+            seed=seed,
+            overwrite=overwrite,
+        )
     return results
