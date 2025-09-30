@@ -1,224 +1,190 @@
-from __future__ import annotations
-from typing import Optional, Tuple
+"""
+Tree Ensemble Teacher for Knowledge Distillation
+===============================================
+
+This module implements a powerful tree ensemble teacher that combines:
+- LightGBM (200+ estimators)
+- Extra Trees (200+ estimators)
+- XGBoost (200+ estimators)
+
+With soft voting for knowledge distillation.
+"""
 
 import numpy as np
-import torch
-from torch import nn
-from torch.utils.data import Dataset, DataLoader
-import pytorch_lightning as pl
+import joblib
+from sklearn.ensemble import ExtraTreesClassifier, VotingClassifier
+from typing import Optional
+import lightgbm as lgb
+import xgboost as xgb
 
 
-class NpDataset(Dataset):
-    """Thin NumPy-backed dataset for tensors."""
-
-    def __init__(self, X: np.ndarray, y: Optional[np.ndarray] = None):
-        assert isinstance(X, np.ndarray), "X must be a NumPy array"
-        self.X = torch.from_numpy(X).float()
-        self.y = None if y is None else torch.from_numpy(y).long()
-
-    def __len__(self) -> int:
-        return self.X.shape[0]
-
-    def __getitem__(self, idx: int):
-        if self.y is None:
-            return self.X[idx]
-        return self.X[idx], self.y[idx]
-
-
-class TeacherNet(pl.LightningModule):
+class TreeEnsembleTeacher:
     """
-    4-layer MLP teacher. Final layer outputs logits (no softmax).
-    Supports post-hoc **temperature scaling** for calibration.
+    Powerful tree ensemble teacher for knowledge distillation.
+    Combines multiple strong tree-based models with soft voting.
     """
 
     def __init__(
         self,
-        in_dim: int,
-        n_classes: int,
-        hidden: Tuple[int, int, int] = (256, 128, 64),
-        dropout: float = 0.1,
-        lr: float = 1e-3,
-        weight_decay: float = 1e-4,
+        n_estimators: int = 200,
+        random_state: int = 42,
+        class_weight: str = "balanced",
     ):
-        super().__init__()
-        self.save_hyperparameters()
-        h1, h2, h3 = hidden
-        self.net = nn.Sequential(
-            nn.Linear(in_dim, h1),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(h1, h2),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(h2, h3),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(h3, n_classes),
-        )
-        self.loss = nn.CrossEntropyLoss()
-        # Temperature parameter for calibration (set to 1.0 by default)
-        self.register_buffer("temperature", torch.ones(1))
+        """
+        Initialize tree ensemble teacher.
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.net(x)  # logits
+        Args:
+            n_estimators: Number of trees per base model
+            random_state: Random seed
+            class_weight: Class weighting strategy
+        """
+        self.n_estimators = n_estimators
+        self.random_state = random_state
+        self.class_weight = class_weight
+        self.ensemble: Optional[VotingClassifier] = None
 
-    def training_step(self, batch, _):
-        x, y = batch
-        logits = self(x)
-        loss = self.loss(logits, y)
-        self.log("train_loss", loss, prog_bar=True)
-        return loss
+    def _create_base_models(self):
+        """Create the base tree models for the ensemble."""
+        # Handle class_weight properly for sklearn
+        cw = self.class_weight if self.class_weight == "balanced" else None
 
-    def validation_step(self, batch, _):
-        x, y = batch
-        logits = self(x)
-        loss = self.loss(logits, y)
-        self.log("val_loss", loss, prog_bar=True)
-        return loss
-
-    def configure_optimizers(self):
-        return torch.optim.AdamW(
-            self.parameters(),
-            lr=self.hparams.lr,
-            weight_decay=self.hparams.weight_decay,
+        # LightGBM Classifier
+        lgb_model = lgb.LGBMClassifier(
+            n_estimators=self.n_estimators,
+            max_depth=15,
+            learning_rate=0.1,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            random_state=self.random_state,
+            class_weight=self.class_weight,
+            n_jobs=-1,
+            verbose=-1,
         )
 
-    @torch.no_grad()
-    def softmax_temperature(self, logits: torch.Tensor) -> torch.Tensor:
-        """Apply temperature scaling to logits and return calibrated probabilities."""
-        T = self.temperature.clamp_min(1e-6)
-        z = logits / T
-        return torch.softmax(z, dim=1)
+        # Extra Trees Classifier
+        et = ExtraTreesClassifier(
+            n_estimators=self.n_estimators,
+            max_depth=20,
+            min_samples_split=5,
+            min_samples_leaf=2,
+            max_features="sqrt",
+            class_weight=cw,
+            random_state=self.random_state,
+            n_jobs=-1,
+        )
+
+        # XGBoost Classifier
+        xgb_model = xgb.XGBClassifier(
+            n_estimators=self.n_estimators,
+            max_depth=15,
+            learning_rate=0.1,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            random_state=self.random_state,
+            n_jobs=-1,
+            eval_metric="logloss",
+        )
+
+        return lgb_model, et, xgb_model
+
+    def fit(self, X: np.ndarray, y: np.ndarray) -> "TreeEnsembleTeacher":
+        """Fit the ensemble teacher on training data."""
+
+        # Ensure X is numpy array
+        X = np.asarray(X)
+        y = np.asarray(y)
+
+        n_classes = len(np.unique(y))
+        print(f"Training tree ensemble teacher with {n_classes} classes...")
+
+        # Create base models
+        lgb_model, et, xgb_model = self._create_base_models()
+
+        # Create voting ensemble with soft voting for probability outputs
+        self.ensemble = VotingClassifier(
+            estimators=[("lgb", lgb_model), ("et", et), ("xgb", xgb_model)],
+            voting="soft",  # Critical for knowledge distillation
+        )
+
+        print("Fitting ensemble components...")
+        print("  - Training LightGBM...")
+        print("  - Training Extra Trees...")
+        print("  - Training XGBoost...")
+
+        # Fit the ensemble
+        self.ensemble.fit(X, y)
+
+        print("✓ Tree ensemble teacher training complete!")
+        return self
+
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        """Make hard predictions."""
+        if self.ensemble is None:
+            raise ValueError("Model must be fitted before making predictions")
+        X = np.asarray(X)
+        return np.asarray(self.ensemble.predict(X))
+
+    def predict_proba(self, X: np.ndarray) -> np.ndarray:
+        """Get soft targets for knowledge distillation."""
+        if self.ensemble is None:
+            raise ValueError("Model must be fitted before making predictions")
+        X = np.asarray(X)
+        return self.ensemble.predict_proba(X)
+
+    def score(self, X: np.ndarray, y: np.ndarray) -> float:
+        """Calculate accuracy score."""
+        if self.ensemble is None:
+            raise ValueError("Model must be fitted before scoring")
+        X = np.asarray(X)
+        y = np.asarray(y)
+        return float(self.ensemble.score(X, y))
 
 
 def train_teacher(
     X_train: np.ndarray,
     y_train: np.ndarray,
-    X_val: Optional[np.ndarray] = None,
-    y_val: Optional[np.ndarray] = None,
     *,
-    max_epochs: int = 20,
-    batch_size: int = 2048,
-    num_workers: int = 4,
-    hidden: Tuple[int, int, int] = (256, 128, 64),
-    dropout: float = 0.1,
-    lr: float = 1e-3,
-    weight_decay: float = 1e-4,
-    seed: int = 42,
-) -> TeacherNet:
-    pl.seed_everything(seed, workers=True)
-    n_classes = int(np.unique(y_train).size)
-    model = TeacherNet(
-        X_train.shape[1],
-        n_classes,
-        hidden=hidden,
-        dropout=dropout,
-        lr=lr,
-        weight_decay=weight_decay,
+    n_estimators: int = 200,
+    class_weight: str = "balanced",
+    random_state: int = 42,
+) -> TreeEnsembleTeacher:
+    """
+    Train a powerful tree ensemble teacher for knowledge distillation.
+
+    Args:
+        X_train: Training features
+        y_train: Training labels
+        n_estimators: Number of estimators per base model
+        class_weight: How to handle class imbalance
+        random_state: Random seed for reproducibility
+
+    Returns:
+        Trained tree ensemble teacher
+    """
+
+    teacher = TreeEnsembleTeacher(
+        n_estimators=n_estimators, random_state=random_state, class_weight=class_weight
     )
 
-    train_loader = DataLoader(
-        NpDataset(X_train, y_train),
-        batch_size=batch_size,
-        shuffle=True,
-        num_workers=num_workers,
-        pin_memory=True,
-    )
-    val_loader = None
-    if X_val is not None and y_val is not None:
-        val_loader = DataLoader(
-            NpDataset(X_val, y_val),
-            batch_size=batch_size * 2,
-            shuffle=False,
-            num_workers=num_workers,
-            pin_memory=True,
-        )
+    return teacher.fit(X_train, y_train)
 
-    callbacks = []
-    if val_loader is not None:
-        callbacks = [
-            pl.callbacks.EarlyStopping(monitor="val_loss", patience=3, mode="min"),
-            pl.callbacks.ModelCheckpoint(
-                monitor="val_loss", mode="min", save_last=True
-            ),
-        ]
 
-    trainer = pl.Trainer(
-        max_epochs=max_epochs,
-        accelerator="auto",
-        devices="auto",
-        callbacks=callbacks,
-        log_every_n_steps=50,
-    )
+def save_teacher_model(
+    model: TreeEnsembleTeacher,
+    X: np.ndarray,
+    y: np.ndarray,
+    filepath: str = "teacher_model.joblib",
+) -> None:
+    """Save the teacher model after training."""
+    if model.ensemble is None:
+        model.fit(X, y)
 
-    trainer.fit(model, train_dataloaders=train_loader, val_dataloaders=val_loader)
+    joblib.dump(model, filepath)
+    print(f"Teacher model saved to {filepath}")
+
+
+def load_teacher_model(filepath: str = "teacher_model.joblib") -> TreeEnsembleTeacher:
+    """Load a trained teacher model."""
+    model = joblib.load(filepath)
+    print(f"Teacher model loaded from {filepath}")
     return model
-
-
-def predict_logits(
-    model: TeacherNet, X: np.ndarray, batch_size: int = 8192, num_workers: int = 4
-) -> np.ndarray:
-    """Return raw logits (no softmax). Shape: [n_samples, n_classes]."""
-    loader = DataLoader(
-        NpDataset(X),
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=num_workers,
-        pin_memory=True,
-    )
-    model.eval()
-    preds = []
-    device = next(model.parameters()).device
-    with torch.no_grad():
-        for xb in loader:
-            xb = xb.to(device)
-            logits = model(xb)
-            preds.append(logits.cpu().numpy())
-    return np.concatenate(preds, axis=0)
-
-
-def calibrate_temperature(
-    model: TeacherNet,
-    X_val: np.ndarray,
-    y_val: np.ndarray,
-    max_iters: int = 1000,
-    lr: float = 0.01,
-) -> float:
-    """Fit temperature by minimising NLL on a held-out set (val/test)."""
-    device = next(model.parameters()).device
-    model.eval()
-    T = torch.ones(1, device=device, requires_grad=True)
-    optimiser = torch.optim.LBFGS([T], lr=lr, max_iter=max_iters)
-    nll = nn.CrossEntropyLoss()
-
-    X = torch.from_numpy(X_val).float().to(device)
-    y = torch.from_numpy(y_val).long().to(device)
-
-    def closure():
-        optimiser.zero_grad()
-        with torch.no_grad():
-            logits = model(X)
-        loss = nll(logits / T.clamp_min(1e-6), y)
-        loss.backward()
-        return loss
-
-    optimiser.step(closure)
-    with torch.no_grad():
-        model.temperature.copy_(T.detach().cpu())
-    return float(T.detach().cpu().item())
-
-
-def logits_to_probs(logits: np.ndarray) -> np.ndarray:
-    """Stable softmax (NumPy)."""
-    z = logits - logits.max(axis=1, keepdims=True)
-    e = np.exp(z)
-    return e / e.sum(axis=1, keepdims=True)
-
-
-def logits_to_calibrated_probs(model: TeacherNet, logits: np.ndarray) -> np.ndarray:
-    """Apply learned temperature to logits to yield calibrated probabilities."""
-    T = max(1e-6, float(model.temperature.item()))
-    z = logits / T
-    z = z - z.max(axis=1, keepdims=True)
-    e = np.exp(z)
-    return e / e.sum(axis=1, keepdims=True)

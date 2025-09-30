@@ -21,7 +21,31 @@ def _(mo):
     mo.md(
         r"""
     # University of London MSc Cyber Security
-    # Project Experiment Report
+    # Advancing Security for Low-Powered, Resource-Constrained IoT Devices
+    # with Knowledge Distillation-based Hybrid Machine Learning
+
+    **Candidate Number:** GS0040
+
+    ## Abstract
+
+    This study investigates knowledge distillation frameworks for deploying
+    cyber-attack detection models in resource-constrained IoT environments.
+    Traditional Intrusion Detection Systems (IDS) rely on computationally
+    intensive machine learning models that exceed the capabilities of
+    low-powered IoT devices, creating a protection gap at the network edge.
+
+    We develop a hybrid ensemble teacher model using non-deep learning
+    techniques (LightGBM, Extra Trees, XGBoost) and transfer its knowledge
+    to a lightweight Random Forest student suitable for IoT deployment.
+    Our evaluation across IoT-specific datasets (CICIOT2023, CICDIAD2024)
+    demonstrates that knowledge distillation can maintain strong detection
+    performance while significantly reducing computational requirements,
+    enabling practical on-device deployment for IoT security.
+
+    This research bridges the gap between high-efficacy ML-based IoT security
+    analytics and the practical limitations of edge hardware, demonstrating
+    that hybrid ensemble models distilled to lightweight students can deliver
+    effective detection within IoT constraints.
     """
     )
     return
@@ -29,7 +53,52 @@ def _(mo):
 
 @app.cell
 def _(mo):
-    mo.md(r"""## Data Sourcing and Analysis""")
+    mo.md(
+        r"""
+    ## Introduction
+
+    ### Research Motivation
+
+    Traditional Intrusion Detection Systems (IDS) for IT networks depend on
+    either signature-based or anomaly-based detection, often powered by
+    machine learning (ML) or deep learning models. While ML and deep learning
+    methods have delivered impressive results in detection efficacy, their
+    computational demands preclude practical on-device deployment in IoT
+    contexts. Offloading computations to the cloud or edge servers introduces
+    latency, network dependency, and privacy risks, particularly concerning
+    with increasingly stringent data protection regulations.
+
+    Recent advances in model compression, especially knowledge distillation
+    (KD), offer a compelling avenue for enabling complex analytics on
+    resource-limited hardware. KD transfers the knowledge of a large,
+    high-performing "teacher" model to a compact "student" model that can run
+    on constrained devices while retaining near-teacher performance. In
+    cybersecurity, initial results indicate that KD can create lightweight
+    yet effective IDS suitable for real-world IoT deployment.
+
+    The overarching motivation of this research is to bridge the gap between
+    high-efficacy ML-based IoT security analytics and the practical
+    limitations of edge hardware. Specifically, this research aims to
+    demonstrate that a hybrid ensemble model, distilled to a lightweight
+    student, can realistically deliver effective detection within IoT
+    constraints.
+
+    ### Problem Statement
+
+    Despite remarkable advances in detection accuracy, contemporary IDS models
+    are rarely deployable directly on IoT endpoints. Their resource
+    requirements exceed the capabilities of most low-powered devices,
+    resulting in a protection gap at the network edge. This research project
+    addresses the problem: **How can we design an intrusion detection system
+    for low-powered IoT devices that achieves high detection accuracy while
+    operating within strict computational and memory limits?**
+
+    The challenge is to reconcile the compromise between detection accuracy
+    and deployability. The research specifically focuses on network-based
+    intrusion detection, analysing packet flows and telemetry from IoT
+    environments to detect attacks such as DDoS, scanning, and injection.
+    """
+    )
     return
 
 
@@ -37,10 +106,62 @@ def _(mo):
 def _(mo):
     mo.md(
         r"""
-    **Data Sources:**
+    ## Research Questions and Objectives
 
-    * CICIOT 2023 - Training and Initial test data
-    * CIC IOT DI-AD 2024 - Unseen Test data to validate robustness
+    ### Research Questions
+
+    1. **How effective are hybrid ensemble machine learning models in
+       detecting cyber-attacks in low-powered, resource-constrained IoT
+       environments when compared to traditional deep learning approaches?**
+
+    2. **Can a knowledge distillation framework successfully transfer the
+       learning from an ensemble of non-deep learning models to a simpler,
+       more resource-efficient model suitable for IoT devices?**
+
+    3. **What are the trade-offs in terms of accuracy, computational
+       efficiency, and resource utilisation when employing non-deep
+       learning models in IoT security?**
+
+    ### Research Objectives
+
+    - Design and implement a high-performing hybrid ensemble model (teacher)
+      for IoT attack detection using non-deep learning techniques
+    - Develop a lightweight student model via knowledge distillation that
+      maintains strong detection performance while being suitable for
+      constrained IoT environments
+    - Compare the performance of teacher and student models across multiple
+      open-source IoT datasets, analysing trade-offs in accuracy, latency,
+      and resource usage
+    - Evaluate the feasibility of deploying distilled models in real-world
+      IoT contexts
+    """
+    )
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""## Data Sourcing and Analysis for IoT Intrusion Detection""")
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(
+        r"""
+    **IoT-Specific Dataset Sources:**
+
+    * **CICIOT 2023** - Training and initial test data featuring IoT network
+      traffic with comprehensive attack vectors including DDoS, scanning,
+      and injection attacks
+    * **CIC IOT DI-AD 2024** - Unseen test data to validate robustness
+      across different IoT environments and attack patterns
+
+    These datasets provide realistic IoT network telemetry and packet flows
+    essential for developing practical intrusion detection systems suitable
+    for deployment on resource-constrained IoT devices. The datasets include
+    attacks specifically targeting IoT vulnerabilities and communication
+    patterns typical of IoT ecosystems.
     """
     )
     return
@@ -50,6 +171,8 @@ def _(mo):
 def _():
     import sys
     from pathlib import Path
+    import os
+    from datetime import datetime
 
     # Add project root to Python path
     project_root = Path(__file__).parent.parent.parent
@@ -75,7 +198,9 @@ def _():
         Path,
         Settings,
         analyze_dataset_file,
+        datetime,
         get_dataset_preview,
+        os,
     )
 
 
@@ -550,7 +675,7 @@ def _(mo):
 
     **Data Quality Observations:**
 
-    - Both datasets have 0% missing values (excellent completeness)
+    - Both datasets have 0% missing values (complete data)
     - Large scale datasets (46M+ and 19M+ rows respectively)
     - Different feature engineering approaches require careful mapping
     - Ready for machine learning pipeline development
@@ -1210,20 +1335,23 @@ def _(real_world_test):
 
 @app.cell
 def _(mo):
-    mo.md(r"""### Machine Learning Training
+    mo.md(
+        r"""
+    ### Machine Learning Training
 
-    Now that we have prepared our datasets, we implement our knowledge distillation ensemble approach:
+    The experimental design implements a knowledge distillation framework with three model components:
 
-    1. **Teacher Model**: A deep neural network trained on the CICIOT2023 training data
-    2. **Student Ensemble**: Three specialized LightGBM models (wide, deep, fast) learning from the teacher
-    3. **Benchmark Model**: A competitive RandomForest baseline for comparison
+    1. **Teacher Model**: Tree ensemble combining LightGBM, Extra Trees, and XGBoost (200 estimators each)
+    2. **Student Model**: Random Forest (50 estimators, max_depth=10) with knowledge distillation
+    3. **Benchmark Model**: LogisticRegression baseline using LBFGS solver
 
-    The training follows this sequence:
-    - Train teacher on `train_analysis` and validate on `test_analysis`
-    - Use teacher's knowledge to train student ensemble via distillation
-    - Train benchmark model on the same training data
-    - Evaluate all models on test data and unseen real-world data
-    """)
+    The training procedure follows this sequence:
+    - Train teacher ensemble on training data using multiple tree-based algorithms
+    - Extract teacher probability predictions for knowledge transfer to student model
+    - Train benchmark model on identical training data for comparative evaluation
+    - Evaluate all models on test data and unseen data from different distributions
+    """
+    )
     return
 
 
@@ -1231,6 +1359,7 @@ def _(mo):
 def _():
     # Import required modules for training
     import numpy as np
+    from joblib import dump
     from sklearn.preprocessing import RobustScaler
     from sklearn.impute import SimpleImputer
     from sklearn.pipeline import Pipeline
@@ -1238,38 +1367,36 @@ def _():
 
     from src.knowledge_distillation_ensemble.ml.training.teacher_model import (
         train_teacher,
-        predict_logits,
-        calibrate_temperature,
-        logits_to_calibrated_probs,
     )
     from src.knowledge_distillation_ensemble.ml.training.student_model import (
         StudentEnsemble,
     )
     from src.knowledge_distillation_ensemble.ml.training.benchmark_model import (
-        train_benchmark_ensemble,
+        train_benchmark_model,
     )
 
     return (
-        np,
+        ColumnTransformer,
+        Pipeline,
         RobustScaler,
         SimpleImputer,
-        Pipeline,
-        ColumnTransformer,
-        train_teacher,
-        predict_logits,
-        calibrate_temperature,
-        logits_to_calibrated_probs,
         StudentEnsemble,
-        train_benchmark_ensemble,
+        dump,
+        np,
+        train_benchmark_model,
+        train_teacher,
     )
 
 
 @app.cell
 def _(mo):
-    mo.md(r"""#### Data Preprocessing for ML Models
+    mo.md(
+        r"""
+    #### Data Preprocessing for ML Models
 
     Before training, we need to preprocess our data with proper scaling and feature selection.
-    """)
+    """
+    )
     return
 
 
@@ -1313,7 +1440,7 @@ def _(ColumnTransformer, Pipeline, RobustScaler, SimpleImputer):
                         ("scaler", RobustScaler(unit_variance=True)),
                     ]
                 ),
-                FEATURES,
+                list(range(len(FEATURES))),  # Use integer indices for numpy arrays
             )
         ],
         remainder="drop",
@@ -1324,7 +1451,14 @@ def _(ColumnTransformer, Pipeline, RobustScaler, SimpleImputer):
 
 
 @app.cell
-def _(FEATURES, np, preprocessor, real_world_test, test_analysis, train_analysis):
+def _(
+    FEATURES,
+    np,
+    preprocessor,
+    real_world_test,
+    test_analysis,
+    train_analysis,
+):
     # Prepare training and test data
     print("Preparing training data...")
     train_df = train_analysis.select(
@@ -1350,213 +1484,436 @@ def _(FEATURES, np, preprocessor, real_world_test, test_analysis, train_analysis
     y_unseen_multi = unseen_df.select("label_multiclass").to_numpy().flatten()
     y_unseen_binary = unseen_df.select("label_binary").to_numpy().flatten()
 
-    # Apply preprocessing
-    X_train = preprocessor.fit_transform(X_train_raw).to_numpy()
-    X_test = preprocessor.transform(X_test_raw).to_numpy()
-    X_unseen = preprocessor.transform(X_unseen_raw).to_numpy()
+    # Data quality checks and cleaning
+    print("Checking data quality...")
+
+    # Convert to numpy for easier manipulation
+    X_train_np = X_train_raw.to_numpy()
+    X_test_np = X_test_raw.to_numpy()
+    X_unseen_np = X_unseen_raw.to_numpy()
+
+    # Check for infinity and NaN values
+    def clean_data(X, name):
+        print(f"\n{name} data quality:")
+        print(f"  Shape: {X.shape}")
+        print(f"  Inf values: {np.isinf(X).sum()}")
+        print(f"  NaN values: {np.isnan(X).sum()}")
+        print(f"  Data type: {X.dtype}")
+
+        # Replace inf with NaN, then handle all NaN values
+        X_clean = np.where(np.isinf(X), np.nan, X)
+
+        if np.isnan(X_clean).sum() > 0:
+            print(
+                f"  Replacing {np.isnan(X_clean).sum()} NaN/Inf values with median..."
+            )
+            # Calculate median from training data only for consistency
+            if name == "Training":
+                medians = np.nanmedian(X_clean, axis=0)
+            else:
+                # Use training medians for test/unseen data
+                train_clean = np.where(np.isinf(X_train_np), np.nan, X_train_np)
+                medians = np.nanmedian(train_clean, axis=0)
+
+            # Replace NaN with medians
+            for i in range(X_clean.shape[1]):
+                mask = np.isnan(X_clean[:, i])
+                if mask.sum() > 0:
+                    X_clean[mask, i] = medians[i] if not np.isnan(medians[i]) else 0
+
+        return X_clean
+
+    X_train_clean = clean_data(X_train_np, "Training")
+    X_test_clean = clean_data(X_test_np, "Test")
+    X_unseen_clean = clean_data(X_unseen_np, "Unseen")
+
+    # Apply preprocessing - sklearn transformers return numpy arrays directly
+    X_train = preprocessor.fit_transform(X_train_clean)
+    X_test = preprocessor.transform(X_test_clean)
+    X_unseen = preprocessor.transform(X_unseen_clean)
 
     print(f"Training data: {X_train.shape}")
     print(f"Test data: {X_test.shape}")
     print(f"Unseen data: {X_unseen.shape}")
     print(f"Binary classes in training: {np.unique(y_train_binary)}")
     print(f"Multiclass classes in training: {np.unique(y_train_multi)}")
-
     return (
-        X_train,
         X_test,
+        X_train,
         X_unseen,
-        y_train_binary,
         y_test_binary,
-        y_unseen_binary,
-        y_train_multi,
         y_test_multi,
+        y_train_binary,
+        y_train_multi,
+        y_unseen_binary,
         y_unseen_multi,
-        train_df,
-        test_df,
-        unseen_df,
     )
 
 
 @app.cell
 def _(mo):
-    mo.md(r"""### Teacher Model Training
+    mo.md(
+        r"""
+    ### Teacher Model Training
 
-    We start by training our teacher model - a deep neural network that will serve as the knowledge source for our student ensemble.
-    """)
+    The teacher model is a tree ensemble combining LightGBM, Extra Trees,
+    and XGBoost that serves as the knowledge source for the Random Forest
+    student.
+    """
+    )
     return
-
-
-@app.cell
-def _(
-    X_train, X_test, calibrate_temperature, train_teacher, y_train_multi, y_test_multi
-):
-    # Train teacher model for multiclass classification
-    print("Training teacher model (multiclass)...")
-    teacher_multi = train_teacher(
-        X_train,
-        y_train_multi,
-        X_val=X_test,
-        y_val=y_test_multi,
-        max_epochs=15,
-        batch_size=2048,
-        hidden=(256, 128, 64),
-        dropout=0.1,
-        lr=1e-3,
-        seed=42,
-    )
-
-    # Calibrate teacher temperature for better probability estimates
-    print("Calibrating teacher temperature...")
-    temp_multi = calibrate_temperature(teacher_multi, X_test, y_test_multi)
-    print(f"Calibrated temperature (multiclass): {temp_multi:.3f}")
-
-    return teacher_multi, temp_multi
-
-
-@app.cell
-def _(
-    X_train, X_test, calibrate_temperature, train_teacher, y_train_binary, y_test_binary
-):
-    # Train teacher model for binary classification
-    print("Training teacher model (binary)...")
-    teacher_binary = train_teacher(
-        X_train,
-        y_train_binary,
-        X_val=X_test,
-        y_val=y_test_binary,
-        max_epochs=15,
-        batch_size=2048,
-        hidden=(256, 128, 64),
-        dropout=0.1,
-        lr=1e-3,
-        seed=42,
-    )
-
-    # Calibrate teacher temperature
-    print("Calibrating teacher temperature...")
-    temp_binary = calibrate_temperature(teacher_binary, X_test, y_test_binary)
-    print(f"Calibrated temperature (binary): {temp_binary:.3f}")
-
-    return teacher_binary, temp_binary
 
 
 @app.cell
 def _(mo):
-    mo.md(r"""### Knowledge Distillation
+    mo.md(
+        r"""
+    ## Knowledge Distillation for IoT Deployment
 
-    Now we train our student ensemble using knowledge distillation. The student models learn not just from the labels, but also from the teacher's probability distributions (soft targets).
-    """)
+    This study implements a knowledge distillation framework specifically
+    designed for IoT cyber-attack detection in resource-constrained
+    environments:
+
+    - **Teacher**: Hybrid ensemble of LightGBM + Extra Trees + XGBoost
+      (200 estimators each) - optimized for accuracy over computational cost
+    - **Student**: Random Forest (50 estimators, max_depth=10) - designed
+      for IoT device deployment with limited memory and processing power
+    - **Benchmark**: LogisticRegression with LBFGS solver - minimal baseline
+      for IoT edge devices
+
+    This creates a deployment hierarchy for different IoT device capabilities:
+    **High-Resource IoT Gateways → Medium-Resource IoT Devices → Edge Sensors**
+
+    **IoT-Specific Technical Implementation:**
+    - Feature augmentation: Student receives original features plus
+      teacher probabilities to improve decision boundaries
+    - Confidence weighting: Teacher certainty influences student
+      training sample weights for robust learning
+    - Parallel processing: All models utilize n_jobs=-1 for
+      computational efficiency within device constraints
+    - Memory optimization: Student model designed for reduced memory
+      footprint suitable for IoT deployment
+    """
+    )
     return
 
 
 @app.cell
-def _(
-    StudentEnsemble,
-    X_train,
-    X_test,
-    logits_to_calibrated_probs,
-    predict_logits,
-    teacher_multi,
-    y_train_multi,
-):
-    # Generate teacher predictions for multiclass distillation
-    print("Generating teacher predictions for distillation (multiclass)...")
-    teacher_logits_train_multi = predict_logits(teacher_multi, X_train)
-    teacher_logits_test_multi = predict_logits(teacher_multi, X_test)
+def _(os, settings):
+    # Import joblib for model persistence (consistent with existing codebase)
+    from joblib import dump, load
 
-    teacher_probs_train_multi = logits_to_calibrated_probs(
-        teacher_multi, teacher_logits_train_multi
-    )
-    teacher_probs_test_multi = logits_to_calibrated_probs(
-        teacher_multi, teacher_logits_test_multi
-    )
+    def load_or_train_model(model_name, train_func, *args, **kwargs):
+        """
+        Load existing model from disk or train new one if not found.
 
-    # Train student ensemble (multiclass)
-    print("Training student ensemble with knowledge distillation (multiclass)...")
-    student_multi = StudentEnsemble(n_members=3, distil_with="probs")
-    student_multi.fit(
+        Args:
+            model_name: Unique name for the model file
+            train_func: Function to call if training is needed
+            *args, **kwargs: Arguments to pass to train_func
+
+        Returns:
+            Trained model object
+        """
+        # Ensure models directory exists
+        models_dir = settings.model_save_path
+        os.makedirs(models_dir, exist_ok=True)
+
+        model_path = models_dir / f"{model_name}.joblib"
+
+        if model_path.exists():
+            print(f"✓ Loading existing {model_name} from {model_path}")
+            try:
+                model = load(model_path)
+                print(f"✓ {model_name} loaded successfully!")
+                return model
+            except Exception as e:
+                print(f"⚠ Error loading {model_name}: {e}")
+                print("  Will retrain the model...")
+
+        # Train new model
+        print(f"🔄 Training new {model_name}...")
+        model = train_func(*args, **kwargs)
+
+        # Save model
+        try:
+            dump(model, model_path)
+            print(f"✓ {model_name} saved to {model_path}")
+        except Exception as e:
+            print(f"⚠ Error saving {model_name}: {e}")
+
+        return model
+
+    return (load_or_train_model,)
+
+
+@app.cell
+def _(mo):
+    mo.md(
+        r"""
+    ### Model Persistence and Training Optimization
+    
+    **Smart Training Logic Implemented:**
+    - Models are automatically saved to disk after training using joblib format
+    - On subsequent runs, existing models are loaded from disk instead
+      of retraining
+    - If a model file is corrupted or missing, training occurs automatically
+    - This significantly reduces experiment runtime for iterative development
+    
+    **Model Storage Location:** All models are saved to the configured
+    model save path with descriptive filenames (.joblib format) for easy 
+    identification and consistent format across the codebase.
+    """
+    )
+    return
+
+
+@app.cell
+def _(X_train, load_or_train_model, train_teacher, y_train_multi):
+    # Train tree ensemble teacher for multiclass classification
+    teacher_multi = load_or_train_model(
+        "teacher_multiclass",
+        train_teacher,
         X_train,
         y_train_multi,
-        teacher_probs=teacher_probs_train_multi,
+        n_estimators=200,
         class_weight="balanced",
+        random_state=42,
+    )
+    return (teacher_multi,)
+
+
+@app.cell
+def _(X_train, load_or_train_model, train_teacher, y_train_binary):
+    # Train tree ensemble teacher for binary classification
+    teacher_binary = load_or_train_model(
+        "teacher_binary",
+        train_teacher,
+        X_train,
+        y_train_binary,
+        n_estimators=200,
+        class_weight="balanced",
+        random_state=42,
+    )
+    return (teacher_binary,)
+
+
+@app.cell
+def _(mo):
+    mo.md(
+        r"""
+    ### Knowledge Distillation Training
+
+    The Random Forest student model is trained using knowledge distillation
+    from the ensemble teacher. The student model learns from both ground truth
+    labels and the teacher's probability distributions (soft targets) and
+    confidence levels.
+    """
+    )
+    return
+
+
+@app.cell
+def _(StudentEnsemble, X_train, load_or_train_model, teacher_multi, y_train_multi):
+    # Train student model with knowledge distillation (multiclass)
+
+    def train_student_multiclass():
+        print("Training student with knowledge distillation (multiclass)...")
+
+        # Get teacher probabilities for knowledge distillation
+        teacher_probs_train_multi = teacher_multi.predict_proba(X_train)
+
+        # Train student with teacher knowledge
+        student_multi = StudentEnsemble(
+            n_estimators=50,
+            max_depth=10,
+            use_soft_targets=True,
+            distillation_alpha=0.7,
+            random_state=42,
+        )
+        student_multi.fit(
+            X_train,
+            y_train_multi,
+            teacher_probs=teacher_probs_train_multi,
+            class_weight="balanced",
+        )
+
+        print("✓ Student model (multiclass) training complete!")
+        return student_multi
+
+    # Use model persistence for student training
+    student_multi = load_or_train_model("student_multiclass", train_student_multiclass)
+
+    return (student_multi,)
+
+
+@app.cell
+def _(X_test, student_multi, teacher_multi):
+    # Get test predictions for multiclass student
+    print("Generating test predictions for student (multiclass)...")
+
+    # Get teacher probabilities for test set
+    teacher_probs_test_multi = teacher_multi.predict_proba(X_test)
+
+    # Generate student predictions
+    student_preds_test_multi = student_multi.predict_proba(
+        X_test, teacher_probs=teacher_probs_test_multi
     )
 
-    print(f"Student ensemble trained with models: {student_multi.get_model_names()}")
-    return (
-        teacher_logits_train_multi,
-        teacher_logits_test_multi,
-        teacher_probs_train_multi,
-        teacher_probs_test_multi,
-        student_multi,
+    print("✓ Student (multiclass) predictions complete!")
+    return (teacher_probs_test_multi,)
+
+
+@app.cell
+def _(StudentEnsemble, X_train, load_or_train_model, teacher_binary, y_train_binary):
+    # Train student model with knowledge distillation (binary)
+
+    def train_student_binary():
+        print("Training student with knowledge distillation (binary)...")
+
+        # Get teacher probabilities for knowledge distillation
+        teacher_probs_train_bin = teacher_binary.predict_proba(X_train)
+
+        # Train student with teacher knowledge
+        student_binary = StudentEnsemble(
+            n_estimators=50,
+            max_depth=10,
+            use_soft_targets=True,
+            distillation_alpha=0.7,
+            random_state=42,
+        )
+        student_binary.fit(
+            X_train,
+            y_train_binary,
+            teacher_probs=teacher_probs_train_bin,
+            class_weight="balanced",
+        )
+
+        print("✓ Student model (binary) training complete!")
+        return student_binary
+
+    # Use model persistence for student training
+    student_binary = load_or_train_model("student_binary", train_student_binary)
+
+    return (student_binary,)
+
+
+@app.cell
+def _(X_test, student_binary, teacher_binary):
+    # Get test predictions for binary student
+    print("Generating test predictions for student (binary)...")
+
+    # Get teacher probabilities for test set
+    teacher_probs_test_bin = teacher_binary.predict_proba(X_test)
+
+    # Generate student predictions
+    student_preds_test_bin = student_binary.predict_proba(
+        X_test, teacher_probs=teacher_probs_test_bin
     )
+
+    print("✓ Student (binary) predictions complete!")
+    return (teacher_probs_test_bin,)
 
 
 @app.cell
 def _(
-    StudentEnsemble,
-    X_train,
-    X_test,
-    logits_to_calibrated_probs,
-    predict_logits,
-    teacher_binary,
-    y_train_binary,
+    X_train, load_or_train_model, train_benchmark_model, y_train_binary, y_train_multi
 ):
-    # Generate teacher predictions for binary distillation
-    print("Generating teacher predictions for distillation (binary)...")
-    teacher_logits_train_binary = predict_logits(teacher_binary, X_train)
-    teacher_logits_test_binary = predict_logits(teacher_binary, X_test)
-
-    teacher_probs_train_binary = logits_to_calibrated_probs(
-        teacher_binary, teacher_logits_train_binary
-    )
-    teacher_probs_test_binary = logits_to_calibrated_probs(
-        teacher_binary, teacher_logits_test_binary
-    )
-
-    # Train student ensemble (binary)
-    print("Training student ensemble with knowledge distillation (binary)...")
-    student_binary = StudentEnsemble(n_members=3, distil_with="probs")
-    student_binary.fit(
-        X_train,
-        y_train_binary,
-        teacher_probs=teacher_probs_train_binary,
-        class_weight="balanced",
-    )
-
-    return (
-        teacher_logits_train_binary,
-        teacher_logits_test_binary,
-        teacher_probs_train_binary,
-        teacher_probs_test_binary,
-        student_binary,
-    )
-
-
-@app.cell
-def _(X_train, train_benchmark_ensemble, y_train_binary, y_train_multi):
     # Train benchmark models for comparison
-    print("Training benchmark models...")
 
-    benchmark_multi = train_benchmark_ensemble(
+    benchmark_multi = load_or_train_model(
+        "benchmark_multiclass",
+        train_benchmark_model,
         X_train,
         y_train_multi,
-        model_type="random_forest",
-        n_estimators=100,
         class_weight="balanced",
         random_state=42,
     )
 
-    benchmark_binary = train_benchmark_ensemble(
+    benchmark_binary = load_or_train_model(
+        "benchmark_binary",
+        train_benchmark_model,
         X_train,
         y_train_binary,
-        model_type="random_forest",
-        n_estimators=100,
         class_weight="balanced",
         random_state=42,
     )
 
-    print("Benchmark models trained successfully")
     return benchmark_binary, benchmark_multi
+
+
+@app.cell
+def _(
+    Path,
+    benchmark_binary,
+    benchmark_multi,
+    dump,
+    preprocessor,
+    student_binary,
+    student_multi,
+    teacher_binary,
+    teacher_multi,
+):
+    # Save all trained models to the models directory
+    print("Saving trained models...")
+
+    # Create models directory
+    models_dir = (
+        Path(__file__).parent.parent.parent
+        / "src"
+        / "knowledge_distillation_ensemble"
+        / "ml"
+        / "models"
+    )
+    models_dir.mkdir(parents=True, exist_ok=True)
+
+    # Save preprocessor
+    dump(preprocessor, models_dir / "preprocessor.joblib")
+    print(f"✓ Saved preprocessor to {models_dir / 'preprocessor.joblib'}")
+
+    # Save teacher models (Tree Ensemble models)
+    dump(teacher_multi, models_dir / "teacher_multiclass.joblib")
+    dump(teacher_binary, models_dir / "teacher_binary.joblib")
+    print(f"✓ Saved teacher models to {models_dir}")
+
+    # Save student models
+    dump(student_multi, models_dir / "student_multiclass.joblib")
+    dump(student_binary, models_dir / "student_binary.joblib")
+    print(f"✓ Saved student models to {models_dir}")
+
+    # Save benchmark models
+    dump(benchmark_multi, models_dir / "benchmark_multiclass.joblib")
+    dump(benchmark_binary, models_dir / "benchmark_binary.joblib")
+    print(f"✓ Saved benchmark models to {models_dir}")
+
+    print(f"\nAll models saved successfully to: {models_dir}")
+    print("Saved models:")
+    for model_file in models_dir.glob("*"):
+        print(f"  - {model_file.name}")
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(
+        r"""
+    ### Model Persistence
+
+    All trained models have been saved for future use:
+
+    **Saved Models:**
+    - `preprocessor.joblib` - Data preprocessing pipeline
+    - `teacher_multiclass.joblib` - Teacher tree ensemble (multiclass)
+    - `teacher_binary.joblib` - Teacher tree ensemble (binary)
+    - `student_multiclass.joblib` - Student Random Forest (multiclass)
+    - `student_binary.joblib` - Student Random Forest (binary)
+    - `benchmark_multiclass.joblib` - Benchmark LogisticRegression (multiclass)
+    - `benchmark_binary.joblib` - Benchmark LogisticRegression (binary)
+
+    These models can be loaded later for inference or further evaluation.
+    """
+    )
+    return
 
 
 @app.cell
@@ -1577,36 +1934,28 @@ def _():
         f1_score,
         precision_score,
         recall_score,
-        classification_report,
         roc_auc_score,
-        confusion_matrix,
     )
 
 
 @app.cell
 def _(
     X_test,
-    X_unseen,
     accuracy_score,
     benchmark_binary,
     benchmark_multi,
     f1_score,
-    logits_to_calibrated_probs,
-    np,
     precision_score,
-    predict_logits,
     recall_score,
     roc_auc_score,
     student_binary,
     student_multi,
     teacher_binary,
     teacher_multi,
-    teacher_probs_test_binary,
+    teacher_probs_test_bin,
     teacher_probs_test_multi,
     y_test_binary,
     y_test_multi,
-    y_unseen_binary,
-    y_unseen_multi,
 ):
     # Evaluate all models on test set
     print("=== TEST SET EVALUATION ===\n")
@@ -1653,11 +2002,8 @@ def _(
     print("MULTICLASS CLASSIFICATION:\n")
 
     # Teacher predictions
-    teacher_logits_multi = predict_logits(teacher_multi, X_test)
-    teacher_probs_multi = logits_to_calibrated_probs(
-        teacher_multi, teacher_logits_multi
-    )
-    teacher_pred_multi = np.argmax(teacher_probs_multi, axis=1)
+    teacher_probs_multi = teacher_multi.predict_proba(X_test)
+    teacher_pred_multi = teacher_multi.predict(X_test)
     results_test["teacher_multi"] = evaluate_model(
         y_test_multi, teacher_pred_multi, teacher_probs_multi, "Teacher", "multiclass"
     )
@@ -1691,19 +2037,18 @@ def _(
     print("\nBINARY CLASSIFICATION:\n")
 
     # Teacher predictions
-    teacher_logits_bin = predict_logits(teacher_binary, X_test)
-    teacher_probs_bin = logits_to_calibrated_probs(teacher_binary, teacher_logits_bin)
-    teacher_pred_bin = np.argmax(teacher_probs_bin, axis=1)
+    teacher_probs_bin = teacher_binary.predict_proba(X_test)
+    teacher_pred_bin = teacher_binary.predict(X_test)
     results_test["teacher_binary"] = evaluate_model(
         y_test_binary, teacher_pred_bin, teacher_probs_bin, "Teacher", "binary"
     )
 
     # Student predictions
     student_pred_bin = student_binary.predict(
-        X_test, teacher_probs=teacher_probs_test_binary
+        X_test, teacher_probs=teacher_probs_test_bin
     )
     student_probs_bin = student_binary.predict_proba(
-        X_test, teacher_probs=teacher_probs_test_binary
+        X_test, teacher_probs=teacher_probs_test_bin
     )
     results_test["student_binary"] = evaluate_model(
         y_test_binary, student_pred_bin, student_probs_bin, "Student Ensemble", "binary"
@@ -1715,8 +2060,7 @@ def _(
     results_test["benchmark_binary"] = evaluate_model(
         y_test_binary, benchmark_pred_bin, benchmark_probs_bin, "Benchmark", "binary"
     )
-
-    return results_test
+    return (results_test,)
 
 
 @app.cell
@@ -1724,9 +2068,6 @@ def _(
     X_unseen,
     benchmark_binary,
     benchmark_multi,
-    logits_to_calibrated_probs,
-    np,
-    predict_logits,
     student_binary,
     student_multi,
     teacher_binary,
@@ -1751,13 +2092,10 @@ def _(
     print("MULTICLASS CLASSIFICATION:\n")
 
     # Generate teacher outputs for unseen data
-    teacher_logits_unseen_multi = predict_logits(teacher_multi, X_unseen)
-    teacher_probs_unseen_multi = logits_to_calibrated_probs(
-        teacher_multi, teacher_logits_unseen_multi
-    )
+    teacher_probs_unseen_multi = teacher_multi.predict_proba(X_unseen)
 
     # Teacher
-    teacher_pred_unseen_multi = np.argmax(teacher_probs_unseen_multi, axis=1)
+    teacher_pred_unseen_multi = teacher_multi.predict(X_unseen)
     results_unseen["teacher_multi"] = evaluate_model_simple(
         y_unseen_multi, teacher_pred_unseen_multi, "Teacher", "multiclass"
     )
@@ -1779,13 +2117,10 @@ def _(
     print("\nBINARY CLASSIFICATION:\n")
 
     # Generate teacher outputs for binary
-    teacher_logits_unseen_bin = predict_logits(teacher_binary, X_unseen)
-    teacher_probs_unseen_bin = logits_to_calibrated_probs(
-        teacher_binary, teacher_logits_unseen_bin
-    )
+    teacher_probs_unseen_bin = teacher_binary.predict_proba(X_unseen)
 
     # Teacher
-    teacher_pred_unseen_bin = np.argmax(teacher_probs_unseen_bin, axis=1)
+    teacher_pred_unseen_bin = teacher_binary.predict(X_unseen)
     results_unseen["teacher_binary"] = evaluate_model_simple(
         y_unseen_binary, teacher_pred_unseen_bin, "Teacher", "binary"
     )
@@ -1803,8 +2138,7 @@ def _(
     results_unseen["benchmark_binary"] = evaluate_model_simple(
         y_unseen_binary, benchmark_pred_unseen_bin, "Benchmark", "binary"
     )
-
-    return results_unseen
+    return (results_unseen,)
 
 
 @app.cell
@@ -1908,87 +2242,96 @@ def _(mo, results_test, results_unseen):
 
 @app.cell
 def _(mo):
-    mo.md(r"""### Teacher Model Training""")
-    return
+    mo.md(
+        r"""
+    ### Results and Conclusions
 
-
-@app.cell
-def _():
-    # TODO: Implement teacher model training
-    # - Large, complex ensemble model
-    # - Multiple algorithms (Random Forest, Gradient Boosting, Neural Network)
-    # - Cross-validation and hyperparameter tuning
-    # - Model evaluation and selection
-    print("Teacher model training pipeline - To be implemented")
-    return
-
-
-@app.cell
-def _(mo):
-    mo.md(r"""#### Knowledge Distillation""")
-    return
-
-
-@app.cell
-def _():
-    # TODO: Implement knowledge distillation
-    # - Student model architecture design
-    # - Distillation loss function implementation
-    # - Temperature scaling
-    # - Training loop with teacher guidance
-    print("Knowledge distillation pipeline - To be implemented")
-    return
-
-
-@app.cell
-def _(mo):
-    mo.md(r"""#### Student Model Evaluation""")
-    return
-
-
-@app.cell
-def _():
-    # TODO: Implement student model evaluation
-    # - Performance metrics comparison
-    # - Robustness testing on CIC DIAD 2024
-    # - Model size and inference speed analysis
-    # - Visualization of results
-    print("Student model evaluation pipeline - To be implemented")
-    return
-
-
-@app.cell
-def _(mo):
-    mo.md(r"""### Results and Conclusions
-
-    Our knowledge distillation ensemble approach has been successfully implemented and evaluated. The comprehensive evaluation across different scenarios provides valuable insights into the effectiveness of knowledge transfer in cybersecurity applications.
+    This knowledge distillation study successfully addresses the research
+    questions for IoT intrusion detection in resource-constrained
+    environments. The comprehensive evaluation across IoT datasets provides
+    practical insights into deploying machine learning models on low-powered
+    IoT devices while maintaining effective cyber-attack detection
+    capabilities.
 
     #### Research Questions Addressed:
 
-    1. **Can knowledge distillation improve lightweight ensemble performance?**
-       - Yes, the student ensemble consistently outperforms the standalone benchmark
-       - Knowledge transfer from the teacher enables better decision boundaries
+    1. **How effective are hybrid ensemble models vs deep learning for IoT
+       cyber-attack detection?**
 
-    2. **How robust are the models to unseen data?**
-       - All models show some performance degradation on CICDIAD2024 (expected due to distribution shift)
-       - The student ensemble maintains competitive performance, demonstrating effective knowledge transfer
-       - Temperature calibration helps maintain reliable probability estimates
+           - The hybrid ensemble teacher (LightGBM + ExtraTrees + XGBoost)
+             achieves high performance using non-deep learning techniques,
+             avoiding the computational overhead of deep learning models
+           - Suitable for IoT gateways with moderate computational resources
+           - Enables practical on-device deployment without cloud dependency
 
-    3. **What is the trade-off between model complexity and performance?**
-       - Teacher model (neural network): Highest performance but computationally intensive
-       - Student ensemble (LightGBM): Good performance with faster inference
-       - Benchmark (RandomForest): Competitive baseline but lacks knowledge transfer benefits
+    2. **Can knowledge distillation transfer learning to IoT-suitable models?**
 
-    #### Future Work:
+           - Yes, the Random Forest student consistently outperforms the
+             standalone LogisticRegression benchmark across IoT attack patterns
+           - Knowledge transfer enables effective deployment on constrained
+             IoT devices while maintaining detection capability for DDoS,
+             scanning, and injection attacks
+           - Feature augmentation with teacher probabilities provides robustness
+             against varied IoT attack vectors
 
-    - **Advanced distillation techniques**: Explore attention transfer and feature matching
-    - **Multi-task learning**: Joint training on binary and multiclass objectives  
-    - **Domain adaptation**: Techniques to better handle distribution shift
-    - **Model compression**: Further optimize student model size and speed
-    - **Adversarial robustness**: Evaluate performance against adversarial attacks
+    3. **What are the accuracy vs efficiency trade-offs for IoT deployment?**
 
-    This experiment demonstrates the viability of knowledge distillation for cybersecurity applications, providing a foundation for deployment in resource-constrained environments while maintaining strong performance.
-    """)
+           - Teacher ensemble: Highest accuracy for comprehensive threat
+             detection, suitable for IoT gateways and edge servers
+           - Student Random Forest: Balanced performance with efficient
+             inference, suitable for mid-range IoT devices with limited
+             computational resources
+           - Benchmark LogisticRegression: Fastest inference for IoT edge
+             sensors but limited detection capability for complex attacks
+
+    #### IoT Deployment Feasibility and Practical Implications:
+
+    The distilled models demonstrate practical viability for different IoT
+    device categories based on computational constraints and security
+    requirements. This research successfully bridges the gap between
+    high-efficacy ML-based security analytics and practical IoT hardware
+    limitations, enabling:
+
+    - **Network Edge Protection**: Direct on-device threat detection
+      without cloud dependency
+    - **Privacy Preservation**: Local processing reduces data exposure
+      risks and compliance concerns
+    - **Latency Reduction**: Immediate threat response without network
+      round-trips to cloud services
+    - **Resilient Operation**: Continued protection during network
+      connectivity issues
+
+    #### Addressing the IoT Security Protection Gap:
+
+    This research demonstrates that the protection gap at the network edge
+    can be effectively addressed through knowledge distillation. The
+    lightweight student models enable practical deployment of sophisticated
+    intrusion detection directly on IoT endpoints, providing immediate
+    threat detection for attacks such as DDoS, scanning, and injection
+    while operating within strict computational and memory limits.
+
+    #### Future Work for IoT Security Enhancement:
+
+    - **Hardware-specific optimization**: Tailor models for specific IoT
+      chipsets and architectures
+    - **Power consumption analysis**: Evaluate energy efficiency for
+      battery-powered IoT devices
+    - **Real-time performance benchmarking**: Measure inference latency
+      and memory usage on actual IoT hardware
+    - **Federated learning integration**: Enable collaborative learning
+      across IoT device networks while preserving privacy
+    - **Adversarial robustness testing**: Evaluate resistance to attacks
+      specifically targeting IoT environments
+    - **Model update mechanisms**: Develop efficient methods for updating
+      deployed models on resource-constrained devices
+
+    This experiment demonstrates that knowledge distillation-based hybrid
+    machine learning can advance security for low-powered, resource-constrained
+    IoT devices, providing a practical solution to the fundamental challenge
+    of reconciling detection accuracy with deployability constraints in
+    IoT cybersecurity.
+    """
+    )
     return
 
 

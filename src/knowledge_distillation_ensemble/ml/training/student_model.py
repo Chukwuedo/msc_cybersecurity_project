@@ -1,109 +1,60 @@
-from __future__ import annotations
-from typing import Optional, Any, Literal
+"""
+Random Forest Student for Knowledge Distillation
+===============================================
+
+This module implements a Random Forest student that learns
+from the tree ensemble teacher through knowledge distillation.
+"""
 
 import numpy as np
-import lightgbm as lgb
-from sklearn.ensemble import VotingClassifier
+from sklearn.ensemble import RandomForestClassifier
+from typing import Optional
 
 
-class StudentEnsemble:
+class StudentTree:
     """
-    LightGBM ensemble with three specialized models joined by VotingClassifier.
-    Knowledge distillation via feature augmentation with teacher outputs.
+    Random Forest student for knowledge distillation.
 
-    Three model variants:
-    - lgbm_wide: Broad trees, high learning rate, fewer boosting rounds
-    - lgbm_deep: Deep trees, moderate learning rate, more boosting rounds
-    - lgbm_fast: Fast training, low complexity, regularized
+    Uses knowledge from teacher ensemble to improve Random Forest performance
+    through feature augmentation and soft target training.
     """
 
     def __init__(
         self,
-        n_members: int = 3,  # Fixed to 3 for wide/deep/fast
-        distil_with: Literal["none", "logits", "probs"] = "probs",
-        base_params: Optional[dict[str, Any]] = None,
+        n_estimators: int = 50,
+        max_depth: int = 10,
+        min_samples_split: int = 2,
+        min_samples_leaf: int = 1,
+        max_features: Optional[str] = "sqrt",
+        class_weight: str = "balanced",
+        random_state: int = 42,
+        use_soft_targets: bool = True,
+        distillation_alpha: float = 0.7,
+        temperature: float = 1.0,
     ):
-        if n_members != 3:
-            print(
-                f"Warning: n_members={n_members} but using fixed 3 variants (wide/deep/fast)"
-            )
+        self.n_estimators = n_estimators
+        self.max_depth = max_depth
+        self.min_samples_split = min_samples_split
+        self.min_samples_leaf = min_samples_leaf
+        self.max_features = max_features
+        self.class_weight = class_weight
+        self.random_state = random_state
+        self.use_soft_targets = use_soft_targets
+        self.distillation_alpha = distillation_alpha
+        self.temperature = temperature
 
-        self.n_members = 3
-        self.distil_with = distil_with
+        self.tree = None
+        self.n_classes_ = None
 
-        # Base parameters - will be specialized per variant
-        self.base_params = base_params or {}
-
-        self.ensemble: Optional[VotingClassifier] = None
-        self.n_classes_: Optional[int] = None
-
-    def _augment(
-        self, X: np.ndarray, teacher_outputs: Optional[np.ndarray]
+    def _augment_features(
+        self, X: np.ndarray, teacher_probs: Optional[np.ndarray] = None
     ) -> np.ndarray:
-        """Augment features with teacher outputs if distillation is enabled."""
-        if teacher_outputs is None or self.distil_with == "none":
+        """Augment features with teacher knowledge."""
+        if teacher_probs is None or not self.use_soft_targets:
             return X
-        if teacher_outputs.ndim == 1:
-            teacher_outputs = teacher_outputs[:, None]
-        return np.hstack([X, teacher_outputs])
 
-    def _build_specialized_models(self) -> list[tuple[str, lgb.LGBMClassifier]]:
-        """Build three specialized LightGBM variants."""
-
-        # Default base configuration
-        base_config = {
-            "random_state": 42,
-            "n_jobs": -1,
-            "verbose": -1,
-            **self.base_params,
-        }
-
-        # Wide model: Broad trees, fewer rounds, higher learning rate
-        wide_config = {
-            **base_config,
-            "n_estimators": 400,
-            "learning_rate": 0.1,
-            "num_leaves": 127,  # Wider trees
-            "max_depth": 8,
-            "subsample": 0.8,
-            "colsample_bytree": 0.8,
-            "reg_lambda": 0.5,
-            "random_state": 42,
-        }
-
-        # Deep model: Deeper trees, more rounds, moderate learning rate
-        deep_config = {
-            **base_config,
-            "n_estimators": 800,
-            "learning_rate": 0.05,
-            "num_leaves": 63,
-            "max_depth": 12,  # Deeper trees
-            "subsample": 0.7,
-            "colsample_bytree": 0.7,
-            "reg_lambda": 1.0,
-            "random_state": 43,
-        }
-
-        # Fast model: Quick training, regularized, simple
-        fast_config = {
-            **base_config,
-            "n_estimators": 200,
-            "learning_rate": 0.15,
-            "num_leaves": 31,  # Smaller trees
-            "max_depth": 6,
-            "subsample": 0.9,
-            "colsample_bytree": 0.9,
-            "reg_lambda": 2.0,
-            "random_state": 44,
-        }
-
-        models = [
-            ("lgbm_wide", lgb.LGBMClassifier(**wide_config)),
-            ("lgbm_deep", lgb.LGBMClassifier(**deep_config)),
-            ("lgbm_fast", lgb.LGBMClassifier(**fast_config)),
-        ]
-
-        return models
+        # Add teacher probabilities as additional features
+        return np.hstack([X, teacher_probs])
 
     def fit(
         self,
@@ -111,81 +62,131 @@ class StudentEnsemble:
         y: np.ndarray,
         teacher_logits: Optional[np.ndarray] = None,
         teacher_probs: Optional[np.ndarray] = None,
-        class_weight: Optional[str | dict] = "balanced",
-    ):
-        """Train the ensemble with optional knowledge distillation."""
-        self.n_classes_ = int(np.unique(y).size)
+        class_weight: Optional[str] = None,
+    ) -> "StudentTree":
+        """
+        Fit the decision tree with knowledge distillation.
 
-        # Choose which teacher signal to append
-        teacher_feat = None
-        if self.distil_with == "logits":
-            teacher_feat = teacher_logits
-        elif self.distil_with == "probs":
-            teacher_feat = teacher_probs
+        Args:
+            X: Training features
+            y: Training labels
+            teacher_logits: For compatibility (ignored)
+            teacher_probs: Soft targets from teacher
+            class_weight: Class weighting (overrides init parameter)
+        """
 
-        X_aug = self._augment(X, teacher_feat)
+        # Use passed class_weight if provided
+        if class_weight is not None:
+            self.class_weight = class_weight
 
-        # Build specialized models
-        models = self._build_specialized_models()
+        self.n_classes_ = len(np.unique(y))
+        print(f"Training Random Forest student for {self.n_classes_} classes...")
 
-        # Configure objective based on number of classes
-        for name, clf in models:
-            if self.n_classes_ == 2:
-                clf.set_params(objective="binary", class_weight=class_weight)
-            else:
-                clf.set_params(
-                    objective="multiclass",
-                    num_class=self.n_classes_,
-                    class_weight=class_weight,
-                )
+        # Augment features with teacher knowledge
+        X_augmented = self._augment_features(X, teacher_probs)
 
-        # Create voting ensemble
-        self.ensemble = VotingClassifier(
-            estimators=models, voting="soft", n_jobs=-1, flatten_transform=True
+        # Prepare sample weights from teacher confidence
+        sample_weights = None
+        if teacher_probs is not None and self.use_soft_targets:
+            teacher_confidence = np.max(teacher_probs, axis=1)
+            sample_weights = self.distillation_alpha * teacher_confidence + (
+                1 - self.distillation_alpha
+            ) * np.ones_like(teacher_confidence)
+
+        # Create and fit Random Forest
+        cw = self.class_weight if self.class_weight == "balanced" else None
+        mf = self.max_features if self.max_features in ["sqrt", "log2"] else "sqrt"
+
+        self.tree = RandomForestClassifier(
+            n_estimators=self.n_estimators,
+            max_depth=self.max_depth,
+            min_samples_split=self.min_samples_split,
+            min_samples_leaf=self.min_samples_leaf,
+            max_features=mf,
+            class_weight=cw,
+            random_state=self.random_state,
+            n_jobs=-1,
         )
 
-        # Fit the ensemble
-        self.ensemble.fit(X_aug, y)
+        # Fit with sample weights if available
+        if sample_weights is not None:
+            self.tree.fit(X_augmented, y, sample_weight=sample_weights)
+        else:
+            self.tree.fit(X_augmented, y)
+
+        print("✓ Random Forest student training complete!")
         return self
 
     def predict(
-        self,
-        X: np.ndarray,
-        teacher_logits: Optional[np.ndarray] = None,
-        teacher_probs: Optional[np.ndarray] = None,
+        self, X: np.ndarray, teacher_probs: Optional[np.ndarray] = None
     ) -> np.ndarray:
-        """Make predictions using the ensemble."""
-        assert self.ensemble is not None, "Model not fitted"
-
-        teacher_feat = None
-        if self.distil_with == "logits":
-            teacher_feat = teacher_logits
-        elif self.distil_with == "probs":
-            teacher_feat = teacher_probs
-
-        X_aug = self._augment(X, teacher_feat)
-        return self.ensemble.predict(X_aug)
+        """Make predictions with feature augmentation."""
+        if self.tree is None:
+            raise ValueError("Model must be fitted before making predictions")
+        X_augmented = self._augment_features(X, teacher_probs)
+        return self.tree.predict(X_augmented)
 
     def predict_proba(
-        self,
-        X: np.ndarray,
-        teacher_logits: Optional[np.ndarray] = None,
-        teacher_probs: Optional[np.ndarray] = None,
+        self, X: np.ndarray, teacher_probs: Optional[np.ndarray] = None
     ) -> np.ndarray:
-        """Make probability predictions using the ensemble."""
-        assert self.ensemble is not None, "Model not fitted"
+        """Get prediction probabilities with feature augmentation."""
+        if self.tree is None:
+            raise ValueError("Model must be fitted before making predictions")
+        X_augmented = self._augment_features(X, teacher_probs)
+        return self.tree.predict_proba(X_augmented)
 
-        teacher_feat = None
-        if self.distil_with == "logits":
-            teacher_feat = teacher_logits
-        elif self.distil_with == "probs":
-            teacher_feat = teacher_probs
-
-        X_aug = self._augment(X, teacher_feat)
-        return self.ensemble.predict_proba(X_aug)
+    def score(
+        self, X: np.ndarray, y: np.ndarray, teacher_probs: Optional[np.ndarray] = None
+    ) -> float:
+        """Calculate accuracy score."""
+        if self.tree is None:
+            raise ValueError("Model must be fitted before scoring")
+        X_augmented = self._augment_features(X, teacher_probs)
+        return float(self.tree.score(X_augmented, y))
 
     def get_model_names(self) -> list[str]:
-        """Get names of the constituent models."""
-        if self.ensemble is None:
-            return ["lgbm_wide", "lgbm_deep", "lgbm_fast"]
-        return [name for name, _ in self.ensemble.estimators]
+        """Get model name for compatibility."""
+        return ["random_forest"]
+
+
+# Alias for compatibility with existing code
+StudentEnsemble = StudentTree
+
+
+def train_student(
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    teacher_probs: Optional[np.ndarray] = None,
+    *,
+    n_estimators: int = 50,
+    max_depth: int = 10,
+    random_state: int = 42,
+    use_soft_targets: bool = True,
+    distillation_alpha: float = 0.7,
+) -> StudentTree:
+    """
+    Train a Random Forest student for knowledge distillation.
+
+    Args:
+        X_train: Training features
+        y_train: Training labels
+        teacher_probs: Teacher probability predictions
+        n_estimators: Number of trees in forest
+        max_depth: Maximum depth of trees
+        random_state: Random seed for reproducibility
+        use_soft_targets: Whether to use teacher soft targets
+        distillation_alpha: Weight for teacher knowledge
+
+    Returns:
+        Trained Random Forest student
+    """
+
+    student = StudentTree(
+        n_estimators=n_estimators,
+        max_depth=max_depth,
+        random_state=random_state,
+        use_soft_targets=use_soft_targets,
+        distillation_alpha=distillation_alpha,
+    )
+
+    return student.fit(X_train, y_train, teacher_probs=teacher_probs)

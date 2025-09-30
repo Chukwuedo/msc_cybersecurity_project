@@ -1,73 +1,54 @@
-from __future__ import annotations
-from typing import Optional, Literal
+"""
+Benchmark Model for Knowledge Distillation Evaluation
+====================================================
+
+This module provides a simple logistic regression baseline model
+for fair comparison with the student model in knowledge distillation.
+"""
 
 import numpy as np
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-from sklearn.tree import DecisionTreeClassifier
+from sklearn.linear_model import LogisticRegression
 
 
-def train_benchmark_ensemble(
+def train_benchmark_model(
     X: np.ndarray,
     y: np.ndarray,
     *,
-    model_type: Literal[
-        "random_forest", "gradient_boosting", "decision_tree"
-    ] = "random_forest",
-    n_estimators: int = 100,
-    max_depth: Optional[int] = None,
-    min_samples_leaf: int = 5,
-    class_weight: str | dict | None = "balanced",
+    max_iter: int = 2000,
+    class_weight: str = "balanced",
     random_state: int = 42,
-) -> RandomForestClassifier | GradientBoostingClassifier | DecisionTreeClassifier:
-    """Train a competitive baseline model for fair comparison with the student ensemble."""
+) -> LogisticRegression:
+    """
+    Train a logistic regression baseline model for comparison.
 
-    if model_type == "random_forest":
-        clf = RandomForestClassifier(
-            n_estimators=n_estimators,
-            max_depth=max_depth,
-            min_samples_leaf=min_samples_leaf,
-            class_weight=class_weight,
-            random_state=random_state,
-            n_jobs=-1,
-        )
-    elif model_type == "gradient_boosting":
-        clf = GradientBoostingClassifier(
-            n_estimators=n_estimators,
-            max_depth=max_depth or 6,
-            min_samples_leaf=min_samples_leaf,
-            random_state=random_state,
-        )
-    elif model_type == "decision_tree":
-        clf = DecisionTreeClassifier(
-            max_depth=max_depth,
-            min_samples_leaf=min_samples_leaf,
-            class_weight=class_weight,
-            random_state=random_state,
-        )
-    else:
-        raise ValueError(f"Unknown model_type: {model_type}")
+    Args:
+        X: Training features
+        y: Training labels
+        max_iter: Maximum iterations for convergence
+        class_weight: How to handle class imbalance
+        random_state: Random seed for reproducibility
+
+    Returns:
+        Trained logistic regression model
+    """
+
+    print("Training logistic regression benchmark...")
+
+    # Use 'lbfgs' solver with default multi_class behavior
+    # (automatically handles multinomial for multiclass, ovr for binary)
+    clf = LogisticRegression(
+        max_iter=max_iter,
+        class_weight=class_weight,
+        random_state=random_state,
+        solver="lbfgs",
+        n_jobs=-1,  # Use all available cores
+    )
 
     clf.fit(X, y)
+
+    print("✓ Logistic regression benchmark training complete!")
     return clf
 
 
-# Backwards compatibility
-def train_decision_tree(
-    X: np.ndarray,
-    y: np.ndarray,
-    *,
-    max_depth: Optional[int] = None,
-    min_samples_leaf: int = 5,
-    class_weight: str | dict | None = "balanced",
-    random_state: int = 42,
-) -> DecisionTreeClassifier:
-    """Train a simple decision tree (kept for backwards compatibility)."""
-    return train_benchmark_ensemble(
-        X,
-        y,
-        model_type="decision_tree",
-        max_depth=max_depth,
-        min_samples_leaf=min_samples_leaf,
-        class_weight=class_weight,
-        random_state=random_state,
-    )
+# Alias for backward compatibility
+train_benchmark_ensemble = train_benchmark_model
