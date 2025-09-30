@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 from matplotlib import ticker as mtick
+from datetime import datetime
 
 
 # ---- Seaborn setup --------------------------------------------------------
@@ -75,7 +76,14 @@ def chart_label_stats(stats: pl.DataFrame, title: str):
 
     fig, axes = plt.subplots(1, 2, figsize=(13, 4), constrained_layout=True)
 
-    sns.barplot(ax=axes[0], data=df, x="label", y="n", order=order, color="#4C78A8")
+    sns.barplot(
+        ax=axes[0],
+        data=df,
+        x="label",
+        y="n",
+        order=order,
+        color="#4C78A8",
+    )
     axes[0].set_title(f"{title} - counts")
     axes[0].set_xlabel("label")
     axes[0].set_ylabel("count")
@@ -86,7 +94,14 @@ def chart_label_stats(stats: pl.DataFrame, title: str):
         )
     )
 
-    sns.barplot(ax=axes[1], data=df, x="label", y="pct", order=order, color="#72B7B2")
+    sns.barplot(
+        ax=axes[1],
+        data=df,
+        x="label",
+        y="pct",
+        order=order,
+        color="#72B7B2",
+    )
     axes[1].set_title(f"{title} - percent")
     axes[1].set_xlabel("label")
     axes[1].set_ylabel("%")
@@ -110,6 +125,25 @@ def chart_label_stats(stats: pl.DataFrame, title: str):
 
     plt.show()
     return fig
+
+
+def save_current_figure(name: str, out_dir: Path | str) -> Path:
+    """Save the current matplotlib figure to out_dir with timestamped filename.
+
+    Args:
+        name: base name without extension
+            (e.g., "class_distribution_ciciot2023")
+        out_dir: output directory
+
+    Returns:
+        Path to the saved PNG file.
+    """
+    p = Path(out_dir)
+    p.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    out = p / f"{name}_{ts}.png"
+    plt.savefig(out, dpi=200, bbox_inches="tight")
+    return out
 
 
 # ---- Binary / Multiclass encodings ---------------------------------------
